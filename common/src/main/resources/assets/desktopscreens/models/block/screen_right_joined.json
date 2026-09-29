@@ -1,0 +1,16 @@
+{
+  "textures": {
+    "particle": "desktopscreens:block/screen_back",
+    "front": "desktopscreens:block/screen_front",
+    "back": "desktopscreens:block/screen_back"
+  },
+  "elements": [
+    {
+      "from": [0, 1, 14],
+      "to": [1, 15, 14],
+      "faces": {
+        "north": { "uv": [7, 1, 8, 15], "texture": "#front" }
+      }
+    }
+  ]
+}

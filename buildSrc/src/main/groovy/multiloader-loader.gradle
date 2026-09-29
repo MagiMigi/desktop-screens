@@ -1,0 +1,37 @@
+// Applied by fabric and neoforge: compiles core's and common's sources into the loader's own jar.
+plugins {
+    id 'multiloader-common'
+}
+
+configurations {
+    commonJava {
+        canBeResolved = true
+    }
+    commonResources {
+        canBeResolved = true
+    }
+    coreJava {
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    compileOnly(project(':common')) {
+        capabilities {
+            requireCapability "$group:$mod_id"
+        }
+    }
+    commonJava project(path: ':common', configuration: 'commonJava')
+    commonResources project(path: ':common', configuration: 'commonResources')
+    coreJava project(path: ':core', configuration: 'coreJava')
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn(configurations.commonJava, configurations.coreJava)
+    source(configurations.commonJava, configurations.coreJava)
+}
+
+processResources {
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
+}

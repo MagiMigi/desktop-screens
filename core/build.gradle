@@ -1,0 +1,65 @@
+// Plain Java with no Minecraft code: screen capture, mouse/keyboard handover and window handling.
+// Kept Java 8 compatible so 1.8.9 and 1.12.2 can share it later. The loader projects compile these
+// sources straight into their own jars.
+plugins {
+    id 'java-library'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 8
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:-options' // "source value 8 is obsolete": intentional
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    concentusSources {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+
+dependencies {
+    // Minecraft ships JNA, so we only compile against it. 5.14.0 is the version 1.21.1 bundles.
+    compileOnly 'net.java.dev.jna:jna:5.14.0'
+    compileOnly 'net.java.dev.jna:jna-platform:5.14.0'
+    // Concentus: Opus in pure Java (BSD-3-Clause), for the sound of shared screens. Players on any system can decode it.
+    concentusSources 'io.github.jaredmdobson:concentus:1.0.2:sources'
+}
+
+// Concentus is compiled in under our own package, so another mod's copy of it can't clash with ours (NeoForge
+// refuses two jars with the same package). Its sources are renamed here, not kept in the repository.
+def relocateConcentus = tasks.register('relocateConcentus', Sync) {
+    from({ zipTree(configurations.concentusSources.singleFile) }) {
+        include 'io/github/jaredmdobson/concentus/*.java'
+        eachFile { it.path = it.path.replace('io/github/jaredmdobson/concentus/', 'com/desktopscreens/lib/concentus/') }
+        filter { line -> line.replace('io.github.jaredmdobson.concentus', 'com.desktopscreens.lib.concentus') }
+        filteringCharset = 'UTF-8'
+    }
+    includeEmptyDirs = false
+    into layout.buildDirectory.dir('generated/concentus')
+}
+
+sourceSets.main.java.srcDir(relocateConcentus)
+
+configurations {
+    coreJava {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+artifacts {
+    coreJava file('src/main/java')
+    coreJava(layout.buildDirectory.dir('generated/concentus')) {
+        builtBy relocateConcentus
+    }
+}

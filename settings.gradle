@@ -1,0 +1,41 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'Fabric'
+                    url = uri('https://maven.fabricmc.net')
+                }
+            }
+            filter {
+                includeGroupAndSubgroups('net.fabricmc')
+                includeGroup('fabric-loom')
+            }
+        }
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'NeoForged'
+                    url = uri('https://maven.neoforged.net/releases')
+                }
+            }
+            filter {
+                includeGroupAndSubgroups('net.neoforged')
+            }
+        }
+    }
+}
+
+plugins {
+    // Downloads a matching JDK if the build machine doesn't have one.
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'desktopscreens'
+
+// core:     plain Java, no Minecraft (screen capture, mouse/keyboard, windows). Java 8 so every MC version can share it.
+// common:   Minecraft 1.21.1 code shared by both loaders.
+// fabric, neoforge: loader entry points; each compiles core + common into its own jar.
+include('core', 'common', 'fabric', 'neoforge')

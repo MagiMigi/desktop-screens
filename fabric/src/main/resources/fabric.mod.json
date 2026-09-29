@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${version}",
+  "name": "${mod_name}",
+  "description": "${description}",
+  "authors": ["${mod_author}"],
+  "license": "${license}",
+  "contact": {
+    "homepage": "https://github.com/MagiMigi/desktop-screens",
+    "sources": "https://github.com/MagiMigi/desktop-screens",
+    "issues": "https://github.com/MagiMigi/desktop-screens/issues"
+  },
+  "icon": "assets/${mod_id}/icon.png",
+  "environment": "*",
+  "mixins": ["desktopscreens.mixins.json", "desktopscreens.fabric.mixins.json"],
+  "entrypoints": {
+    "main": ["com.desktopscreens.fabric.DesktopScreensFabric"],
+    "client": ["com.desktopscreens.fabric.DesktopScreensFabricClient"],
+    "modmenu": ["com.desktopscreens.fabric.ModMenuIntegration"]
+  },
+  "depends": {
+    "fabricloader": ">=${fabric_loader_min}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "java": ">=${java_version}"
+  }
+}

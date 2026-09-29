@@ -1,0 +1,29 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "desktopscreens:block/screen_back",
+    "front": "desktopscreens:block/screen_front",
+    "back": "desktopscreens:block/screen_back"
+  },
+  "display": {
+    "firstperson_righthand": {
+      "rotation": [0, 160, 0],
+      "translation": [0, 1.5, 0],
+      "scale": [0.35, 0.35, 0.35]
+    }
+  },
+  "elements": [
+    {
+      "from": [0, 0, 7],
+      "to": [16, 16, 9],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#front" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#back" },
+        "east": { "uv": [0, 0, 2, 16], "texture": "#back" },
+        "west": { "uv": [14, 0, 16, 16], "texture": "#back" },
+        "up": { "uv": [0, 0, 16, 2], "texture": "#back" },
+        "down": { "uv": [0, 14, 16, 16], "texture": "#back" }
+      }
+    }
+  ]
+}

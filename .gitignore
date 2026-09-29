@@ -1,0 +1,25 @@
+# Gradle
+.gradle/
+build/
+out/
+bin/
+
+# Minecraft run folders (worlds, logs, options)
+run/
+runs/
+logs/
+*.log
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
