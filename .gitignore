@@ -23,3 +23,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Released jars, kept as uploaded
+releases/
