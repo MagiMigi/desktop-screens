@@ -1,0 +1,61 @@
+plugins {
+    id 'multiloader-loader'
+    id 'net.neoforged.moddev'
+}
+
+// A land-claim mod in our own test game, to check that the Screen Builder asks it (see LandClaims):
+//   gradlew :neoforge:runClient -Pclaims=ftb    FTB Chunks (what All the Mods uses), with FTB Teams and Architectury
+//   gradlew :neoforge:runClient -Pclaims=opac   Open Parties and Claims
+// Only then, and never in the mod's jar.
+def claims = project.findProperty('claims')
+if (claims) {
+    repositories {
+        exclusiveContent {
+            forRepository { maven { name = 'FTB'; url = 'https://maven.ftb.dev/releases' } }
+            filter { includeGroup('dev.ftb.mods') }
+        }
+        exclusiveContent {
+            forRepository { maven { name = 'Architectury'; url = 'https://maven.architectury.dev' } }
+            filter { includeGroup('dev.architectury') }
+        }
+        exclusiveContent {
+            forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+            filter { includeGroup('maven.modrinth') }
+        }
+    }
+    dependencies {
+        switch (claims) {
+            case 'ftb': runtimeOnly 'dev.ftb.mods:ftb-chunks-neoforge:2101.1.22'; break
+            case 'opac': runtimeOnly 'maven.modrinth:open-parties-and-claims:neoforge-1.21.1-0.31.6'; break
+            // Tried on Fabric only, for the Common Protection API; on NeoForge Flan answers the same events as the others.
+            case 'flan': break
+            default: throw new GradleException("-Pclaims=ftb or -Pclaims=opac, not '$claims'")
+        }
+    }
+}
+
+neoForge {
+    version = neoforge_version
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
+    runs {
+        client {
+            client()
+            gameDirectory = file('runs/client')
+            // A fixed name that reads well in screenshots (the Fabric client is "Alex"). Without it NeoForge uses "Dev".
+            programArguments.addAll('--username', 'MagiMigi')
+        }
+        // Start it with tools/server.cmd, which sets it up for the dev client first.
+        server {
+            server()
+            gameDirectory = file('runs/server')
+        }
+    }
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}

@@ -1,0 +1,47 @@
+plugins {
+    id 'multiloader-common'
+    id 'net.neoforged.moddev'
+}
+
+neoForge {
+    // Vanilla Minecraft only (no loader), with Mojang's names.
+    neoFormVersion = neo_form_version
+    parchment {
+        minecraftVersion = parchment_minecraft
+        mappingsVersion = parchment_version
+    }
+}
+
+repositories {
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Fabric'
+                url = 'https://maven.fabricmc.net'
+            }
+        }
+        filter { includeGroup('net.fabricmc') }
+    }
+}
+
+dependencies {
+    compileOnly project(':core')
+    // Only the annotations, for the camera mixin; both loaders bring Mixin itself (this same build of it).
+    compileOnly 'net.fabricmc:sponge-mixin:0.15.2+mixin.0.8.7'
+}
+
+configurations {
+    commonJava {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+    commonResources {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+artifacts {
+    commonJava sourceSets.main.java.sourceDirectories.singleFile
+    commonResources sourceSets.main.resources.sourceDirectories.singleFile
+}

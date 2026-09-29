@@ -1,0 +1,105 @@
+plugins {
+    id 'multiloader-loader'
+    id 'net.fabricmc.fabric-loom-remap'
+}
+
+repositories {
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'TerraformersMC'
+                url = 'https://maven.terraformersmc.com/releases/'
+            }
+        }
+        filter { includeGroup('com.terraformersmc') }
+    }
+    // Land-claim mods (see LandClaimsFabric) and what they need.
+    exclusiveContent {
+        forRepository { maven { name = 'Nucleoid'; url = 'https://maven.nucleoid.xyz/' } }
+        filter { includeGroup('eu.pb4') }
+    }
+    exclusiveContent {
+        forRepository { maven { name = 'Architectury'; url = 'https://maven.architectury.dev' } }
+        filter { includeGroup('dev.architectury') }
+    }
+    exclusiveContent {
+        forRepository { maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup('maven.modrinth') }
+    }
+    exclusiveContent {
+        forRepository { maven { name = 'FTB'; url = 'https://maven.ftb.dev/releases' } }
+        filter { includeGroup('dev.ftb.mods') }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings loom.layered {
+        officialMojangMappings()
+        parchment("org.parchmentmc.data:parchment-${parchment_minecraft}:${parchment_version}@zip")
+    }
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    // Optional for players: we only compile against Mod Menu's API, and add it to our own test client.
+    modCompileOnly("com.terraformersmc:modmenu:${modmenu_version}") { transitive = false }
+    modLocalRuntime("com.terraformersmc:modmenu:${modmenu_version}") { transitive = false }
+    // Land-claim mods the Screen Builder asks when they're installed (LandClaimsFabric). The Common Protection API
+    // (Patbox, MIT, 8 KB) goes inside our jar, as its README suggests: Flan answers through it only when some mod
+    // brought it, and doesn't bring it itself (checked in its jar, 2026-09-28); a claim mod with a newer one wins.
+    modImplementation(include("eu.pb4:common-protection-api:1.0.0"))
+    // Only compiled against: players get these with their claim mod.
+    modCompileOnly("dev.architectury:architectury-fabric:13.0.8") { transitive = false }
+    modCompileOnly("maven.modrinth:open-parties-and-claims:fabric-1.21.1-0.31.6") { transitive = false }
+}
+
+// A land-claim mod in our own test game, to check that the Screen Builder asks it (see LandClaimsFabric):
+//   gradlew :fabric:runClient -Pclaims=ftb    FTB Chunks, with FTB Teams, FTB Library and Architectury
+//   gradlew :fabric:runClient -Pclaims=opac   Open Parties and Claims, with Forge Config API Port
+//   gradlew :fabric:runClient -Pclaims=flan   Flan (asked through the Common Protection API it brings)
+// Only then, and never in the mod's jar. Loom leaves out the jars mods carry inside (it drops their "jars" list when it
+// remaps them for the test game), so those are added by hand where a mod needs one to start: without night-config,
+// Forge Config API Port crashed Open Parties and Claims at launch (2026-09-28). Flan's lingua_bib, its translations,
+// isn't on any public Maven we use: its messages show as keys ("flan.claimCreateSuccess") in our test game.
+def claims = project.findProperty('claims')
+if (claims) {
+    dependencies {
+        switch (claims) {
+            case 'ftb':
+                modLocalRuntime("dev.ftb.mods:ftb-chunks-fabric:2101.1.22") { exclude group: 'net.fabricmc' }
+                break
+            case 'opac':
+                modLocalRuntime("maven.modrinth:open-parties-and-claims:fabric-1.21.1-0.31.6") { transitive = false }
+                modLocalRuntime("maven.modrinth:forge-config-api-port:v21.1.6-1.21.1-Fabric") { transitive = false }
+                localRuntime("com.electronwill.night-config:core:3.8.0")
+                localRuntime("com.electronwill.night-config:toml:3.8.0")
+                break
+            case 'flan':
+                modLocalRuntime("maven.modrinth:flan:1.21.1-1.12.8-fabric") { transitive = false }
+                localRuntime("org.yaml:snakeyaml:2.4")
+                break
+            default:
+                throw new GradleException("-Pclaims=ftb, -Pclaims=opac or -Pclaims=flan, not '$claims'")
+        }
+    }
+}
+
+loom {
+    runs {
+        client {
+            client()
+            setConfigName('Fabric Client')
+            ideConfigGenerated(true)
+            runDir('runs/client')
+            // A fixed name (the NeoForge client is "MagiMigi"): otherwise it's a new random one each launch, which has to
+            // be typed into the share list again and loses the player's things on the test server.
+            programArgs('--username', 'Alex')
+        }
+        // Start it with tools/server.cmd, which sets it up for the dev client first.
+        server {
+            server()
+            setConfigName('Fabric Server')
+            ideConfigGenerated(true)
+            runDir('runs/server')
+        }
+    }
+}
