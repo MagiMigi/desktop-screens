@@ -1,0 +1,99 @@
+name: Bug report
+description: Something doesn't work, looks wrong or crashes.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! The log and your monitor setup help the most: many bugs only happen with some monitor setups.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you saw, and what you expected instead. Screenshots or a short video help a lot (drag them in).
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      description: If you know the steps, list them. "It happens sometimes" is fine too.
+      placeholder: |
+        1. Place a 4 x 3 screen and turn it on
+        2. Press G and open a video
+        3. Tap Right Ctrl
+    validations:
+      required: false
+
+  - type: dropdown
+    id: loader
+    attributes:
+      label: Loader
+      options:
+        - NeoForge
+        - Fabric
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: The mod's version, and Minecraft's.
+      placeholder: Desktop Screens 0.1.0, Minecraft 1.21.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux (watching shared screens)
+        - macOS (watching shared screens)
+    validations:
+      required: true
+
+  - type: textarea
+    id: monitors
+    attributes:
+      label: Your monitors
+      description: How many, their resolution and refresh rate, where they are, and which one Minecraft is on. Say if Minecraft was fullscreen (F11) or in a window.
+      placeholder: |
+        2 monitors: 1920x1080 144 Hz (Minecraft, fullscreen), 1024x768 60 Hz on the left
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      multiple: true
+      options:
+        - Singleplayer
+        - On a server
+        - In a LAN world
+    validations:
+      required: false
+
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods
+      description: The modpack's name, or the other mods you use. Does it also happen with only Desktop Screens (and Fabric API on Fabric)?
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        Drag `latest.log` into this box. It's in the `logs` folder of your Minecraft folder (in the CurseForge app or other launchers: open the profile's folder). If the game crashed, also add the newest file from `crash-reports`.
+        Best right after the bug happened, before starting the game again: each start makes a new `latest.log`.
+    validations:
+      required: true

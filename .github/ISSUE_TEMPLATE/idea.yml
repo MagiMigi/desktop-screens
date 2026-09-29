@@ -1,0 +1,11 @@
+name: Idea or question
+description: Something the mod could do, or a question about it.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea or question
+      description: For an idea, what would you use it for?
+    validations:
+      required: true
