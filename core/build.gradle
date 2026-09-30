@@ -6,7 +6,8 @@ plugins {
 }
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+    // Any JDK can build Java 8 code (options.release below); this is the one the project already uses.
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
 }
 
 tasks.withType(JavaCompile).configureEach {

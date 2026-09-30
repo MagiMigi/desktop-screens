@@ -40,18 +40,20 @@ Please open an [issue](../../issues) with your loader, your Windows version and 
 Needs a Java 21 JDK.
 
 ```
-gradlew build                 # jars end up in fabric/build/libs and neoforge/build/libs
-gradlew :neoforge:runClient   # start Minecraft with the mod (NeoForge)
-gradlew :fabric:runClient     # start Minecraft with the mod (Fabric)
+gradlew build                        # jars end up in versions/<version>-<loader>/build/libs
+gradlew :1.21.1-neoforge:runClient   # start Minecraft with the mod (NeoForge)
+gradlew :1.21.1-fabric:runClient     # start Minecraft with the mod (Fabric)
 ```
 
-`tools\server.cmd neoforge | fabric | vanilla` starts a local test server for those clients to join at `127.0.0.1`.
+`tools\server.cmd neoforge | fabric | vanilla [version]` starts a local test server for those clients to join at `127.0.0.1`.
+
+Every Minecraft version and loader is built from the same code with [Stonecutter](https://stonecutter.kikugie.dev): where versions differ, the code says so in `//?` comments. The versions are listed in `settings.gradle.kts`, their dependencies in `stonecutter.properties.toml`.
 
 | Folder | What's in it |
 |---|---|
-| `core/` | Plain Java, no Minecraft: screen capture, mouse/keyboard handover, moving windows. Java 8 compatible, so other Minecraft versions can reuse it. |
-| `common/` | Minecraft 1.21.1 code shared by both loaders. |
-| `fabric/`, `neoforge/` | Loader entry points. Each builds its own mod jar containing core + common. |
+| `core/` | Plain Java, no Minecraft: screen capture, mouse/keyboard handover, moving windows. Java 8 compatible, so every Minecraft version can use it. |
+| `src/` | The Minecraft code. Loader-only code is in its own package (`com.desktopscreens.fabric`, `com.desktopscreens.neoforge`). |
+| `versions/` | Made by the build: one folder per Minecraft version and loader, with its jar. |
 
 ## License
 

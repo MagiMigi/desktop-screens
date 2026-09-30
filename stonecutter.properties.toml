@@ -1,0 +1,38 @@
+# What changes from one Minecraft version (or loader) to the next. Tables are picked by the version and the loader
+# being built (["1.21.1"], [neoforge."1.21.1"]); the build scripts read the keys as sc.properties["..."].
+# Mod-wide settings (name, version, author) are in gradle.properties.
+
+["1.21.1"]
+java = "21"
+# Minecraft versions the jar says it runs on, for NeoForge and Forge: exactly the one it was built for.
+mod.minecraft_range = "[1.21.1]"
+# https://parchmentmc.org/docs/getting-started
+deps.parchment_minecraft = "1.21.1"
+deps.parchment = "2024.11.17"
+
+[fabric."1.21.1"]
+# https://fabricmc.net/develop/
+deps.fabric_api = "0.116.17+1.21.1"
+deps.fabric_loader = "0.19.5"
+# Oldest loader players may use. Kept low on purpose: modpacks often lag behind the latest.
+deps.fabric_loader_min = "0.16.0"
+# https://modrinth.com/mod/modmenu (optional; only for the settings button in the Fabric mods list)
+deps.modmenu = "11.0.4"
+# Land claims: the Common Protection API goes into our jar; the others are only compiled against or, with
+# -Pclaims=..., put in our test game.
+deps.common_protection = "1.0.0"
+deps.architectury = "13.0.8"
+deps.opac = "fabric-1.21.1-0.31.6"
+deps.ftb_chunks = "2101.1.22"
+deps.forge_config_api_port = "v21.1.6-1.21.1-Fabric"
+deps.flan = "1.21.1-1.12.8-fabric"
+
+[neoforge."1.21.1"]
+# https://projects.neoforged.net/neoforged/neoforge
+deps.neoforge = "21.1.251"
+# Oldest NeoForge players may use. Kept low on purpose: modpacks often lag behind the latest.
+deps.neoforge_range = "[21.1.0,)"
+deps.neoforge_loader_range = "[4,)"
+# Land-claim mods for our test game (-Pclaims=...).
+deps.opac = "neoforge-1.21.1-0.31.6"
+deps.ftb_chunks = "2101.1.22"
