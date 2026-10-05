@@ -19,15 +19,22 @@ import java.util.List;
  * own hooks into a player's clicks, which the builder doesn't go through), and Open Parties and Claims' own API for
  * placing (on Fabric it stops a player's placing at their right-click, which the builder never makes). The last three
  * only while that mod is there, each through its own class ({@link ClaimMods}), so none is loaded without it.
+ * From 26.1 on FTB Chunks no longer listens to Architectury: it's asked through its own API before placing (it hears
+ * breaking through Fabric API's event).
  */
 final class LandClaimsFabric implements LandClaims.Ask {
-    private final boolean commonProtection, architectury, openPac;
+    private final boolean commonProtection, architectury, openPac, ftbChunks;
 
     LandClaimsFabric() {
         FabricLoader loader = FabricLoader.getInstance();
         commonProtection = loader.isModLoaded("common-protection-api");
         architectury = loader.isModLoaded("architectury");
         openPac = loader.isModLoaded("openpartiesandclaims");
+        //? if >=26.1 {
+        /*ftbChunks = loader.isModLoaded("ftbchunks");
+        *///?} else {
+        ftbChunks = false; // it listens to Architectury there
+        //?}
     }
 
     @Override
@@ -54,6 +61,9 @@ final class LandClaimsFabric implements LandClaims.Ask {
     private boolean mayPlace(ServerLevel level, BlockPos pos, BlockState placed, ServerPlayer player) {
         if (commonProtection && !ClaimMods.CommonProtectionApi.mayPlace(level, pos, player)) return false;
         if (architectury && !ClaimMods.Architectury.mayPlace(level, pos, placed, player)) return false;
+        //? if >=26.1 {
+        /*if (ftbChunks && !ClaimMods.FtbChunks.mayPlace(pos, player)) return false;
+        *///?}
         return !openPac || ClaimMods.OpenPartiesAndClaims.mayPlace(level, pos, placed, player);
     }
 }

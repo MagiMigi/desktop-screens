@@ -1,6 +1,7 @@
 // Builds the Fabric jar of one Minecraft version (versions/<version>-fabric) from src/ and core/.
 plugins {
-    id("net.fabricmc.fabric-loom-remap")
+    // Fabric Loom: the remapping kind up to 1.21.11, the plain one from 26.1 on (Minecraft ships with Mojang's names).
+    id("dev.kikugie.loom-back-compat")
 }
 
 val loader = "fabric"
@@ -23,10 +24,16 @@ tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
 }
 
-// src/ holds every loader's code; the other loaders' packages and files stay out of this jar.
+// src/ holds every loader's code; the other loaders' packages and files stay out of this jar. The recipes, loot
+// tables and tags come from the folders in src/data listed for this version (mod.data), in its format.
 sourceSets.main {
-    java.exclude("com/desktopscreens/neoforge/**")
-    resources.exclude("META-INF/neoforge.mods.toml")
+    java.exclude("com/desktopscreens/neoforge/**", "com/desktopscreens/forge/**")
+    resources.exclude("META-INF/neoforge.mods.toml", "META-INF/mods.toml")
+    for (folder in prop("mod.data").split(" ")) resources.srcDir(rootProject.file("src/data/$folder"))
+    // Stand-ins for networking classes Minecraft has only from 1.20.5 on (see net/CustomPacketPayload).
+    if (sc.current.parsed >= "1.20.5") java.exclude("com/desktopscreens/net/**")
+    // 26.1 draws the GUI picture with its own shader (in src/data/26.1) and needs no pack.mcmeta.
+    if (sc.current.parsed >= "26.1") resources.exclude("assets/desktopscreens/shaders/core/desktop.*", "pack.mcmeta")
 }
 
 // core's sources (and the Concentus copy it prepares) are compiled straight into this jar.
@@ -68,7 +75,8 @@ dependencies {
     coreJava(project(path = ":core", configuration = "coreJava"))
 
     minecraft("com.mojang:minecraft:$minecraft")
-    mappings(loom.layered {
+    // Obfuscated versions get Mojang's names (and Parchment's parameter names) mapped on; 26.1 on has them already.
+    if (sc.current.parsed < "26.1") mappings(loom.layered {
         officialMojangMappings()
         parchment("org.parchmentmc.data:parchment-${prop("deps.parchment_minecraft")}:${prop("deps.parchment")}@zip")
     })
@@ -85,6 +93,11 @@ dependencies {
     // Only compiled against: players get these with their claim mod.
     modCompileOnly("dev.architectury:architectury-fabric:${prop("deps.architectury")}") { isTransitive = false }
     modCompileOnly("maven.modrinth:open-parties-and-claims:${prop("deps.opac")}") { isTransitive = false }
+    // FTB Chunks stopped using Architectury in 26.1; we ask its own API before placing (ClaimMods.FtbChunks).
+    if (sc.current.parsed >= "26.1") {
+        modCompileOnly("dev.ftb.mods:ftb-chunks-fabric:${prop("deps.ftb_chunks")}") { isTransitive = false }
+        modCompileOnly("dev.ftb.mods:ftb-library-fabric:${prop("deps.ftb_library")}") { isTransitive = false }
+    }
 }
 
 tasks.compileJava {
@@ -128,10 +141,13 @@ loom {
             client()
             displayName = "Fabric Client"
             generateRunConfig = true
-            runDirectory = runFolder.resolve("client")
             // A fixed name (the NeoForge client is "MagiMigi"): otherwise it's a new random one each launch, which has to
-            // be typed into the share list again and loses the player's things on the test server.
-            programArguments.addAll("--username", "Alex")
+            // be typed into the share list again and loses the player's things on the test server. A second Fabric
+            // player, in a folder of its own: gradlew :26.1.2-fabric:runClient -Pplayer=Steve. From 26.1 on, Fabric API
+            // lets only players with Fabric onto a Fabric server that has our blocks, so two Fabric games test sharing there.
+            val player = findProperty("player") as String? ?: "Alex"
+            runDirectory = runFolder.resolve(if (player == "Alex") "client" else "client-${player.lowercase()}")
+            programArguments.addAll("--username", player)
         }
         // Start it with tools/server.cmd, which sets it up for the dev client first.
         named("server") {
@@ -154,9 +170,10 @@ tasks.processResources {
         "minecraft_version" to minecraft,
         "fabric_loader_min" to prop("deps.fabric_loader_min"),
         "java_version" to javaVersion,
+        "pack_format" to prop("mod.pack_format"),
     )
     inputs.properties(expandProps)
-    filesMatching(listOf("pack.mcmeta", "fabric.mod.json")) {
+    filesMatching(listOf("pack.mcmeta", "fabric.mod.json", "*.mixins.json")) {
         expand(expandProps)
     }
 }

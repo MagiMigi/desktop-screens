@@ -8,9 +8,7 @@ import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.platform.win32.WinDef.RECT;
 
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * Captures one window by itself ({@link GraphicsCapture}) on a background thread, so it comes through while other
@@ -35,7 +33,7 @@ public final class WindowCapture implements AutoCloseable, PictureFeed {
     private final String label;
     private final DesktopCapture.Log log;
     private final Object lock = new Object();
-    private final Map<Long, int[]> hotspots = new HashMap<Long, int[]>(); // capture thread only
+    private final CursorShape.Cache cursors = new CursorShape.Cache(); // capture thread only
     private DesktopCapture.Frame front, back; // front guarded by lock; back capture thread only
     /** The newest picture without the cursor, to draw it again elsewhere. Capture thread only. */
     private Memory clean;
@@ -304,7 +302,7 @@ public final class WindowCapture implements AutoCloseable, PictureFeed {
         readCursor();
         int[] origin = origin();
         cursorDrawn = origin != null && cursorShown && over(origin, cursorX, cursorY);
-        if (cursorDrawn) back.drawCursor(origin[0], origin[1], hotspots);
+        if (cursorDrawn) back.drawCursor(origin[0], origin[1], cursors);
         publish(takenAt);
         lastPublished = System.nanoTime();
     }

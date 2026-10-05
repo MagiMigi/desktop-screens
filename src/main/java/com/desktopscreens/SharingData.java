@@ -1,6 +1,12 @@
 package com.desktopscreens;
 
 import net.minecraft.core.HolderLookup;
+//? if >=26.1 {
+/*import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.world.level.saveddata.SavedDataType;
+*///?}
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -22,8 +28,40 @@ public final class SharingData extends SavedData {
 
     private final Map<UUID, List<ScreenBlockEntity.Watcher>> allScreens = new HashMap<>();
 
+    //? if >=26.1 {
+    /*private static final Codec<ScreenBlockEntity.Watcher> WATCHER = RecordCodecBuilder.create(i -> i.group(
+            UUIDUtil.CODEC.fieldOf("id").forGetter(ScreenBlockEntity.Watcher::id),
+            Codec.STRING.fieldOf("name").forGetter(ScreenBlockEntity.Watcher::name)
+    ).apply(i, ScreenBlockEntity.Watcher::new));
+    /^* One owner's "all your screens" list. ^/
+    private record Owner(UUID owner, List<ScreenBlockEntity.Watcher> allScreens) {}
+    private static final Codec<Owner> OWNER = RecordCodecBuilder.create(i -> i.group(
+            UUIDUtil.CODEC.fieldOf("owner").forGetter(Owner::owner),
+            WATCHER.listOf().fieldOf("all_screens").forGetter(Owner::allScreens)
+    ).apply(i, Owner::new));
+    /^* The same layout as before 26.1, in data/desktopscreens/sharing.dat (no data fixer: it never changed). ^/
+    private static final Codec<SharingData> CODEC = OWNER.listOf().fieldOf("owners").codec().xmap(owners -> {
+        SharingData data = new SharingData();
+        for (Owner o : owners) {
+            if (!o.allScreens().isEmpty()) data.allScreens.put(o.owner(), List.copyOf(o.allScreens()));
+        }
+        return data;
+    }, data -> {
+        List<Owner> owners = new ArrayList<>();
+        data.allScreens.forEach((owner, watchers) -> owners.add(new Owner(owner, watchers)));
+        return owners;
+    });
+    private static final SavedDataType<SharingData> TYPE = new SavedDataType<>(DesktopScreens.id("sharing"), SharingData::new, CODEC, null);
+    *///?}
+
     public static SharingData of(MinecraftServer server) {
+        //? if >=26.1 {
+        /*return server.overworld().getDataStorage().computeIfAbsent(TYPE);
+        *///?} else if >=1.20.5 {
         return server.overworld().getDataStorage().computeIfAbsent(new SavedData.Factory<>(SharingData::new, SharingData::load, null), NAME);
+        //?} else {
+        /*return server.overworld().getDataStorage().computeIfAbsent(SharingData::load, SharingData::new, NAME);
+        *///?}
     }
 
     /** Whom {@code owner} shares all their screens with. */
@@ -55,7 +93,12 @@ public final class SharingData extends SavedData {
         return owners;
     }
 
+    //? if <26.1 {
+    //? if >=1.20.5 {
     private static SharingData load(CompoundTag tag, HolderLookup.Provider registries) {
+    //?} else {
+    /*private static SharingData load(CompoundTag tag) {
+    *///?}
         SharingData data = new SharingData();
         for (Tag o : tag.getList("owners", Tag.TAG_COMPOUND)) {
             CompoundTag owner = (CompoundTag) o;
@@ -71,7 +114,11 @@ public final class SharingData extends SavedData {
     }
 
     @Override
+    //? if >=1.20.5 {
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+    //?} else {
+    /*public CompoundTag save(CompoundTag tag) {
+    *///?}
         ListTag owners = new ListTag();
         for (Map.Entry<UUID, List<ScreenBlockEntity.Watcher>> e : allScreens.entrySet()) {
             CompoundTag owner = new CompoundTag();
@@ -89,4 +136,5 @@ public final class SharingData extends SavedData {
         tag.put("owners", owners);
         return tag;
     }
+    //?}
 }

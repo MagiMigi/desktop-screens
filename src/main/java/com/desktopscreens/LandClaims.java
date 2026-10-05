@@ -60,6 +60,11 @@ public final class LandClaims {
     /** For the log (a server's admin may wonder), when a claim or another mod refused {@code player} something at {@code pos}. */
     public static void refused(ServerLevel level, ServerPlayer player, BlockPos pos, String what) {
         DesktopScreens.LOG.info("Screen Builder: {} may not change blocks here, {} at {} {} {} in {} was refused (a land claim or another mod)",
-                player.getGameProfile().getName(), what, pos.getX(), pos.getY(), pos.getZ(), level.dimension().location());
+                Players.name(player), what, pos.getX(), pos.getY(), pos.getZ(), level.dimension()
+                //? if >=1.21.11 {
+                /*.identifier());
+                *///?} else {
+                .location());
+                //?}
     }
 }

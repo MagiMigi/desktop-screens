@@ -13,9 +13,7 @@ import com.sun.jna.platform.win32.WinGDI;
 import com.sun.jna.platform.win32.WinNT.HANDLE;
 import com.sun.jna.ptr.PointerByReference;
 
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * Captures one monitor on a background thread, including the real mouse cursor. It keeps two BGRA buffers and
@@ -56,7 +54,7 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
     private final Log log;
     private Thread previous; // capture thread only
     private final Object lock = new Object();
-    private final Map<Long, int[]> hotspots = new HashMap<Long, int[]>(); // capture thread only
+    private final CursorShape.Cache cursors = new CursorShape.Cache(); // capture thread only
     private Frame front; // guarded by lock
     private Frame back;  // capture thread only
     private boolean fresh; // guarded by lock
@@ -362,7 +360,7 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
         });
         if (got == null) return false;
         if (got[0] != monitor.width || got[1] != monitor.height) return true; // not this monitor's size (yet): skip it
-        if (drawCursor) back.drawCursor(monitor, hotspots);
+        if (drawCursor) back.drawCursor(monitor, cursors);
         publish(start);
         error = null;
         recordTime(System.nanoTime() - start);
@@ -374,7 +372,7 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
         long start = System.nanoTime();
         try {
             back.grab(monitor);
-            if (drawCursor) back.drawCursor(monitor, hotspots);
+            if (drawCursor) back.drawCursor(monitor, cursors);
             publish(start);
             error = null;
         } catch (RuntimeException e) {
@@ -408,7 +406,7 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
         protectedContent = duplication.protectedContentHidden();
         long start = System.nanoTime();
         duplication.copyTo(back.bits);
-        if (cursor) back.drawCursor(monitor, hotspots);
+        if (cursor) back.drawCursor(monitor, cursors);
         publish(start);
         error = null;
         lastPublished = System.nanoTime();
@@ -493,25 +491,25 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
 
         /**
          * Screen capture never includes the mouse cursor, so draw the real one in whatever shape Windows shows
-         * right now (resize arrows, text cursor, hand...). DrawIconEx also gets the inverting parts right.
+         * right now (resize arrows, text cursor, hand...), its text cursor so it reads also shrunk ({@link CursorShape}).
          */
-        void drawCursor(Monitor m, Map<Long, int[]> hotspots) {
-            drawCursor(m.x, m.y, hotspots);
+        void drawCursor(Monitor m, CursorShape.Cache cursors) {
+            drawCursor(m.x, m.y, cursors);
         }
 
         /** The same for a picture whose top-left pixel is at ({@code originX}, {@code originY}) on the desktop. */
-        void drawCursor(int originX, int originY, Map<Long, int[]> hotspots) {
+        void drawCursor(int originX, int originY, CursorShape.Cache cursors) {
             CURSORINFO ci = new CURSORINFO();
             if (!U32.I.GetCursorInfo(ci) || (ci.flags & Win32.CURSOR_SHOWING) == 0 || ci.hCursor == null) return;
             int x = ci.ptScreenPos.x, y = ci.ptScreenPos.y;
             if (x < originX || y < originY || x >= originX + width || y >= originY + height) return;
-            if (hotspots.size() > 256) hotspots.clear(); // apps can create cursors on the fly; don't grow forever
-            Long key = Pointer.nativeValue(ci.hCursor);
-            int[] hot = hotspots.get(key);
-            if (hot == null) {
-                hot = hotspot(ci.hCursor);
-                hotspots.put(key, hot);
+            CursorShape shape = cursors.get(Pointer.nativeValue(ci.hCursor));
+            if (shape != null) {
+                shape.drawInto(address(), width, height, x - originX, y - originY);
+                return;
             }
+            // Windows wouldn't give its picture: drawn as Windows draws it, inverting parts and all.
+            int[] hot = hotspot(ci.hCursor);
             U32.I.DrawIconEx(dc, x - originX - hot[0], y - originY - hot[1], ci.hCursor, 0, 0, 0, null, Win32.DI_NORMAL);
             G32.I.GdiFlush();
         }

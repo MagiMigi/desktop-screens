@@ -12,7 +12,11 @@ public final class DesktopScreens {
     private DesktopScreens() {}
 
     public static ResourceLocation id(String path) {
+        //? if >=1.21 {
         return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+        //?} else {
+        /*return new ResourceLocation(MOD_ID, path);
+        *///?}
     }
 
     /** Loaders call this every server tick. */

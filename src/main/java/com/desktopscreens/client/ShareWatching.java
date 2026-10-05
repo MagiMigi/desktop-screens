@@ -4,7 +4,6 @@ import com.desktopscreens.ShareStream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -89,10 +88,10 @@ final class ShareWatching {
             // old stream's last picture up, frozen, when that stream's end never reached us, 2026-09-26.)
             if (!pictures && i.saidPictures) SharedPictures.forget(e.getKey());
             if (!pictures && !sound) {
-                if (i.saidPos != null) connection.send(new ServerboundCustomPayloadPacket(new ShareStream.Watch(i.saidPos, false, false, false)));
+                if (i.saidPos != null) ClientNet.toServer(connection, new ShareStream.Watch(i.saidPos, false, false, false));
                 it.remove();
             } else if (pictures != i.saidPictures || sound != i.saidSound || now - i.saidAt > KEEP_ALIVE_NANOS) {
-                connection.send(new ServerboundCustomPayloadPacket(new ShareStream.Watch(i.pos, pictures, sound, H264Support.canDecode())));
+                ClientNet.toServer(connection, new ShareStream.Watch(i.pos, pictures, sound, H264Support.canDecode()));
                 i.saidPos = i.pos;
                 i.saidPictures = pictures;
                 i.saidSound = sound;

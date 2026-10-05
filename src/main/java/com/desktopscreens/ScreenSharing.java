@@ -2,12 +2,16 @@ package com.desktopscreens;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
+//? if >=1.20.5 {
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.desktopscreens.net.ByteBufCodecs;
+import com.desktopscreens.net.StreamCodec;
+import com.desktopscreens.net.CustomPacketPayload;
+*///?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -41,7 +45,7 @@ public final class ScreenSharing {
     public record Lists(List<UUID> sharingAllWithYou, List<String> yourAllScreens) implements CustomPacketPayload {
         public static final Type<Lists> TYPE = new Type<>(DesktopScreens.id("share_lists"));
         public static final StreamCodec<ByteBuf, Lists> STREAM_CODEC = StreamCodec.composite(
-                UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs.list(4096)), Lists::sharingAllWithYou,
+                Codecs.UUID.apply(ByteBufCodecs.list(4096)), Lists::sharingAllWithYou,
                 ByteBufCodecs.stringUtf8(ShareScreen.MAX_NAME).apply(ByteBufCodecs.list(MAX_WATCHERS)), Lists::yourAllScreens,
                 Lists::new);
 
@@ -60,10 +64,10 @@ public final class ScreenSharing {
     /** Tells a player their lists ({@link Lists}), if their game has the mod. */
     public static void sendLists(ServerPlayer player) {
         if (!canReceive.test(player, Lists.TYPE)) return;
-        SharingData data = SharingData.of(player.server);
+        SharingData data = SharingData.of(Players.server(player));
         List<String> names = new ArrayList<>();
         for (ScreenBlockEntity.Watcher w : data.allScreens(player.getUUID())) names.add(w.name());
-        player.connection.send(new ClientboundCustomPayloadPacket(new Lists(data.ownersSharingAllWith(player.getUUID()), names)));
+        Net.toPlayer(player, new Lists(data.ownersSharingAllWith(player.getUUID()), names));
     }
 
     /** The owner adds or removes a player, on one screen or on all of theirs. Says in the action bar what happened. */
@@ -72,7 +76,7 @@ public final class ScreenSharing {
             changeAll(player, request);
             return;
         }
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = Players.level(player);
         BlockPos pos = request.screen();
         if (!level.isLoaded(pos) || !(level.getBlockEntity(pos) instanceof ScreenBlockEntity screen)) return;
         if (player.distanceToSqr(Vec3.atCenterOf(pos)) > RANGE * RANGE) return;
@@ -91,13 +95,13 @@ public final class ScreenSharing {
     }
 
     private static void changeAll(ServerPlayer player, ShareScreen request) {
-        SharingData data = SharingData.of(player.server);
+        SharingData data = SharingData.of(Players.server(player));
         List<ScreenBlockEntity.Watcher> watchers = new ArrayList<>(data.allScreens(player.getUUID()));
         String name = edit(player, watchers, request);
         if (name == null) return;
         data.setAllScreens(player.getUUID(), watchers);
         sendLists(player);
-        ServerPlayer other = player.server.getPlayerList().getPlayerByName(name);
+        ServerPlayer other = Players.server(player).getPlayerList().getPlayerByName(name);
         if (other != null) sendLists(other);
         say(player, request.add() ? "desktopscreens.share.added_all" : "desktopscreens.share.removed_all", name);
     }
@@ -111,7 +115,7 @@ public final class ScreenSharing {
             return watchers.removeIf(w -> w.name().equalsIgnoreCase(request.name())) ? request.name() : null;
         }
         // Only players who are here now: that's who they are, not just a name someone else could take later.
-        ServerPlayer target = player.server.getPlayerList().getPlayerByName(request.name());
+        ServerPlayer target = Players.server(player).getPlayerList().getPlayerByName(request.name());
         if (target == null) {
             say(player, "desktopscreens.share.not_online", request.name());
             return null;
@@ -127,12 +131,12 @@ public final class ScreenSharing {
             say(player, "desktopscreens.share.full", MAX_WATCHERS);
             return null;
         }
-        String name = target.getGameProfile().getName();
+        String name = Players.name(target);
         watchers.add(new ScreenBlockEntity.Watcher(target.getUUID(), name));
         return name;
     }
 
     private static void say(ServerPlayer player, String key, Object... args) {
-        player.displayClientMessage(Component.translatable(key, args), true);
+        Players.overlay(player, Component.translatable(key, args));
     }
 }

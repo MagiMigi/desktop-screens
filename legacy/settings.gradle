@@ -1,0 +1,23 @@
+// Minecraft 1.12.2 (Forge), a build of its own. The main build (../settings.gradle.kts) makes 1.20.1 and newer;
+// 1.12.2 needs another Gradle plugin (RetroFuturaGradle, for Forge's old toolchain) and Java 8.
+// Run it from the main folder: gradlew -p legacy runClient
+pluginManagement {
+    repositories {
+        exclusiveContent {
+            forRepository { maven { name = 'GTNH'; url = 'https://nexus.gtnewhorizons.com/repository/public/' } }
+            filter {
+                includeGroup 'com.gtnewhorizons'
+                includeGroup 'com.gtnewhorizons.retrofuturagradle'
+            }
+        }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+plugins {
+    // Downloads a matching JDK if the build machine doesn't have one (Java 8 for the game, 17 to compile).
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'desktopscreens-legacy'

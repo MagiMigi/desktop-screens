@@ -5,6 +5,7 @@ import com.desktopscreens.core.AppWindow;
 import com.desktopscreens.core.DesktopInput;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
@@ -16,7 +17,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
-import org.lwjgl.glfw.GLFW;
+//? if >=1.21.9 {
+/*import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+*///?}
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +42,8 @@ import java.util.List;
  * out. The HUD and hand are hidden meanwhile.
  */
 public final class DesktopScreen extends Screen {
-    private static final long HINT_MILLIS = 6000, FLASH_MILLIS = 2500;
+    /** How long the banner at the top shows its hints, or a short message; then it fades out over FADE_MILLIS. */
+    private static final long HINT_MILLIS = 6000, FLASH_MILLIS = 2500, FADE_MILLIS = 500;
     private static final int PANEL_WIDTH = 172, PAD = 8, PREVIEW_MARGIN = 8;
     private static final int[] PALETTE = {
             0xFFFFFF, 0xAAAAAA, 0x808080, 0x404040, 0xFF4D4D, 0xFF9F40,
@@ -65,6 +70,8 @@ public final class DesktopScreen extends Screen {
     private long hintUntil;
     private Component flash;
     private long flashUntil;
+    /** What was drawn over the desktop this frame, in window pixels: stays part of the game window when it's cut open. */
+    private final List<int[]> kept = new ArrayList<>();
 
     // Settings widgets, only while in SETTINGS mode.
     private IntSlider thicknessSlider, rainbowSlider;
@@ -108,8 +115,14 @@ public final class DesktopScreen extends Screen {
             // itself just because you clicked something on another monitor.
             FocusHandOff.begin(minecraft);
             if (screen != null) {
+                //? if >=26.2 {
+                /*// The HUD's F1 switch can only be flipped there.
+                hideGuiBefore = minecraft.gui.hud.isHidden();
+                if (!hideGuiBefore) minecraft.gui.hud.toggle();
+                *///?} else {
                 hideGuiBefore = minecraft.options.hideGui;
                 minecraft.options.hideGui = true;
+                //?}
                 hidGui = true;
             }
             if (mode == Mode.DESKTOP) enterDesktop();
@@ -369,9 +382,14 @@ public final class DesktopScreen extends Screen {
             sources.add(s);
             if (initial == null && m.sameAs(current)) initial = s;
         }
+        //? if >=26.1 {
+        /*addRenderableWidget(CycleButton.builder(this::sourceLabel, initial)
+                .withValues(sources)
+        *///?} else {
         addRenderableWidget(CycleButton.builder(this::sourceLabel)
                 .withValues(sources)
                 .withInitialValue(initial)
+        //?}
                 .displayOnlyValue()
                 .withTooltip(value -> Tooltip.create(Component.translatable("desktopscreens.settings.source.tooltip", DesktopClient.hostKeyName())))
                 .create(x, y, w, 20, Component.translatable("desktopscreens.settings.monitor"), (button, value) -> {
@@ -383,9 +401,14 @@ public final class DesktopScreen extends Screen {
                     }
                 }));
         y += 22;
+        //? if >=26.1 {
+        /*addRenderableWidget(CycleButton.builder(Scaling::label, DesktopConfig.scaling)
+                .withValues(Scaling.values())
+        *///?} else {
         addRenderableWidget(CycleButton.builder(Scaling::label)
                 .withValues(Scaling.values())
                 .withInitialValue(DesktopConfig.scaling)
+        //?}
                 .create(x, y, w, 20, Component.translatable("desktopscreens.settings.scaling"), (button, value) -> DesktopConfig.scaling = value));
         y += 22;
         // One slider for both, to save a row: all the way left is fullscreen, anything else is framed with that margin.
@@ -410,9 +433,14 @@ public final class DesktopScreen extends Screen {
                 .bounds(x + w - streamWidth, y, streamWidth, 20)
                 .tooltip(Tooltip.create(Component.translatable("desktopscreens.settings.stream.tooltip"))).build());
         y += 22;
+        //? if >=26.1 {
+        /*addRenderableWidget(CycleButton.builder(BorderStyle::label, DesktopConfig.borderStyle)
+                .withValues(BorderStyle.values())
+        *///?} else {
         addRenderableWidget(CycleButton.builder(BorderStyle::label)
                 .withValues(BorderStyle.values())
                 .withInitialValue(DesktopConfig.borderStyle)
+        //?}
                 .create(x, y, w, 20, Component.translatable("desktopscreens.settings.border"), (button, value) -> {
                     DesktopConfig.borderStyle = value;
                     updateActive();
@@ -427,11 +455,10 @@ public final class DesktopScreen extends Screen {
         // maximized 1080p window at GUI scale 4 (about 254 units tall). It ends at 251 now; there's no room for another row.
         colorLabelY = y + 4;
         int hexWidth = 54;
-        hexBox = addRenderableWidget(new EditBox(font, x + w - hexWidth + 1, y, hexWidth - 2, 16,
-                Component.translatable("desktopscreens.settings.color_hex")));
+        hexBox = addRenderableWidget(new FilteredBox(font, x + w - hexWidth + 1, y, hexWidth - 2, 16,
+                Component.translatable("desktopscreens.settings.color_hex"), text -> text.matches("#?[0-9a-fA-F]{0,6}")));
         hexBox.setMaxLength(7);
         hexBox.setValue(DesktopConfig.hex(DesktopConfig.borderColor));
-        hexBox.setFilter(text -> text.matches("#?[0-9a-fA-F]{0,6}"));
         hexBox.setResponder(text -> DesktopConfig.borderColor = DesktopConfig.color(text, DesktopConfig.borderColor));
         y += 20;
         swatches.clear();
@@ -488,7 +515,11 @@ public final class DesktopScreen extends Screen {
         }
         y += 22;
         // Its choices are asked for on every click: the dragged spot joins the corners once there is one.
+        //? if >=26.1 {
+        /*pipCornerButton = addRenderableWidget(CycleButton.builder(PictureInPicture.Corner::label, DesktopConfig.pipCorner)
+        *///?} else {
         pipCornerButton = addRenderableWidget(CycleButton.builder(PictureInPicture.Corner::label)
+        //?}
                 .withValues(new CycleButton.ValueListSupplier<PictureInPicture.Corner>() {
                     @Override
                     public List<PictureInPicture.Corner> getSelectedList() {
@@ -500,7 +531,9 @@ public final class DesktopScreen extends Screen {
                         return PictureInPicture.Corner.choices();
                     }
                 })
+                //? if <26.1 {
                 .withInitialValue(DesktopConfig.pipCorner)
+                //?}
                 .create(x, y, w, 20, Component.translatable("desktopscreens.pip.corner"), (button, value) -> DesktopConfig.pipCorner = value));
         PictureInPicture.resetPreview();
         y += 22;
@@ -546,8 +579,12 @@ public final class DesktopScreen extends Screen {
     private void addStreamWidgets() {
         int x = PAD, w = PANEL_WIDTH - 2 * PAD, y = 20;
         addRenderableWidget(CycleButton.booleanBuilder(Component.translatable("desktopscreens.stream.hide.needed"),
+                        //? if >=26.1 {
+                        /*Component.translatable("desktopscreens.stream.hide.never"), DesktopConfig.hideGame)
+                        *///?} else {
                         Component.translatable("desktopscreens.stream.hide.never"))
                 .withInitialValue(DesktopConfig.hideGame)
+                        //?}
                 .create(x, y, w, 20, Component.translatable("desktopscreens.stream.hide"), (button, value) -> DesktopConfig.hideGame = value));
         y += 28;
         List<FormattedCharSequence> lines = new ArrayList<>(font.split(Component.translatable("desktopscreens.stream.why"), w));
@@ -576,41 +613,75 @@ public final class DesktopScreen extends Screen {
         rainbowSlider.active = style == BorderStyle.RAINBOW;
     }
 
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+    /** Escape steps back a page; Enter adds the typed name on the sharing page. True if the key was used. */
+    private boolean pageKey(int keyCode) {
+        if (keyCode == InputConstants.KEY_ESCAPE) {
             if (mode == Mode.SHARING || mode == Mode.PIP || mode == Mode.STREAM) switchTo(Mode.SETTINGS);
             else if (mode == Mode.SETTINGS && cameFromDesktop) switchTo(Mode.DESKTOP);
             else onClose();
             return true;
         }
-        if ((keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) && mode == Mode.SHARING && sharingPage.enter()) {
-            return true;
-        }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) && mode == Mode.SHARING && sharingPage.enter();
     }
 
     /** On the picture-in-picture page, the picture in the preview can be dragged anywhere. */
+    private boolean startDrag(double mouseX, double mouseY, int button) {
+        return mode == Mode.PIP && button == InputConstants.MOUSE_BUTTON_LEFT && PictureInPicture.startDrag(minecraft, mouseX, mouseY);
+    }
+
+    private boolean drag(double mouseX, double mouseY, int button) {
+        if (mode == Mode.PIP && button == InputConstants.MOUSE_BUTTON_LEFT && PictureInPicture.dragging()) {
+            pipCornerButton.setValue(PictureInPicture.drag(minecraft, mouseX, mouseY));
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean endDrag(int button) {
+        return button == InputConstants.MOUSE_BUTTON_LEFT && PictureInPicture.endDrag();
+    }
+
+    //? if >=1.21.9 {
+    /*@Override
+    public boolean keyPressed(KeyEvent event) {
+        return pageKey(event.key()) || super.keyPressed(event);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        return super.mouseClicked(event, doubleClick) || startDrag(event.x(), event.y(), event.button());
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        return drag(event.x(), event.y(), event.button()) || super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        return endDrag(event.button()) || super.mouseReleased(event);
+    }
+    *///?} else {
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        return pageKey(keyCode) || super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) return true;
-        return mode == Mode.PIP && button == GLFW.GLFW_MOUSE_BUTTON_LEFT && PictureInPicture.startDrag(minecraft, mouseX, mouseY);
+        return super.mouseClicked(mouseX, mouseY, button) || startDrag(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (mode == Mode.PIP && button == GLFW.GLFW_MOUSE_BUTTON_LEFT && PictureInPicture.dragging()) {
-            pipCornerButton.setValue(PictureInPicture.drag(minecraft, mouseX, mouseY));
-            return true;
-        }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return drag(mouseX, mouseY, button) || super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && PictureInPicture.endDrag()) return true;
-        return super.mouseReleased(mouseX, mouseY, button);
+        return endDrag(button) || super.mouseReleased(mouseX, mouseY, button);
     }
+    //?}
 
     @Override
     public boolean isPauseScreen() {
@@ -636,8 +707,16 @@ public final class DesktopScreen extends Screen {
     }
 
     /** Screen.render draws this first, then the widgets on top. */
+    //? if >=26.1 {
+    /*@Override
+    public void extractBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    *///?} else if >=1.20.2 {
     @Override
     public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    //?} else {
+    /*// Screen.render before 1.20.2 draws no background: render calls this itself.
+    private void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    *///?}
         if (gliding && !leaving && CameraGlide.done()) {
             // Arrived: the picture fills the view, and the real screen takes its place.
             gliding = false;
@@ -660,14 +739,14 @@ public final class DesktopScreen extends Screen {
             }
             g.fill(0, 0, PANEL_WIDTH, height, 0xFF161616);
             if (mode == Mode.SETTINGS) {
-                g.drawString(font, title, PAD, 8, 0xFFFFFF);
-                g.drawString(font, Component.translatable("desktopscreens.settings.color"), PAD, colorLabelY,
+                GuiDraw.text(g, font, title, PAD, 8, 0xFFFFFF);
+                GuiDraw.text(g, font, Component.translatable("desktopscreens.settings.color"), PAD, colorLabelY,
                         DesktopConfig.borderStyle == BorderStyle.SOLID ? 0xE0E0E0 : 0x707070);
             } else if (mode == Mode.PIP || mode == Mode.STREAM) {
-                g.drawString(font, Component.translatable(mode == Mode.PIP ? "desktopscreens.pip.title" : "desktopscreens.stream.title"), PAD, 8, 0xFFFFFF);
-                for (int i = 0; i < pageText.size(); i++) g.drawString(font, pageText.get(i), PAD, pageTextY + i * (font.lineHeight + 1), 0xB0B0B0);
+                GuiDraw.text(g, font, Component.translatable(mode == Mode.PIP ? "desktopscreens.pip.title" : "desktopscreens.stream.title"), PAD, 8, 0xFFFFFF);
+                for (int i = 0; i < pageText.size(); i++) GuiDraw.text(g, font, pageText.get(i), PAD, pageTextY + i * (font.lineHeight + 1), 0xB0B0B0);
             } else {
-                g.drawString(font, Component.translatable("desktopscreens.share.title"), PAD, 8, 0xFFFFFF);
+                GuiDraw.text(g, font, Component.translatable("desktopscreens.share.title"), PAD, 8, 0xFFFFFF);
                 sharingPage.render(g, font, PAD);
             }
         } else {
@@ -676,40 +755,59 @@ public final class DesktopScreen extends Screen {
     }
 
     @Override
+    //? if >=26.1 {
+    /*public void extractRenderState(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(g, mouseX, mouseY, partialTick);
+    *///?} else {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        //? if <1.20.2 {
+        /*renderBackground(g, mouseX, mouseY, partialTick);
+        *///?}
         super.render(g, mouseX, mouseY, partialTick);
+    //?}
         if (session.takeWindowClosed()) {
             showFlash(Component.translatable("desktopscreens.hint.window_closed"));
             if (mode == Mode.SETTINGS) rebuildWidgets(); // the source button still offers the closed window
         }
-        ShareStreamer.renderNotice(minecraft, g, width); // the HUD, which shows it otherwise, is hidden here
+        kept.clear();
+        keep(ShareStreamer.renderNotice(minecraft, g, width)); // the HUD, which shows it otherwise, is hidden here
         if (gliding) return;
         if (mode == Mode.DESKTOP) drawHints(g);
         String error = session.error();
         if (error != null) {
-            drawBanner(g, height - font.lineHeight - 8, 0xFF6060, Component.translatable("desktopscreens.error.capture", error));
+            drawBanner(g, height - font.lineHeight - 8, 0xFF6060, 255, Component.translatable("desktopscreens.error.capture", error));
         } else if (session.protectedContentHidden()) {
             // Otherwise it's just a black box with the subtitles still showing, which looks like a bug.
-            drawBanner(g, height - 2 * (font.lineHeight + 3) - 6, 0xFFD37F, Component.translatable("desktopscreens.hint.protected"),
+            drawBanner(g, height - 2 * (font.lineHeight + 3) - 6, 0xFFD37F, 255, Component.translatable("desktopscreens.hint.protected"),
                     Component.translatable("desktopscreens.hint.protected_how", DesktopClient.hostKey("M")));
         }
+        session.shapeWindow(kept);
+    }
+
+    /** Remembers a part drawn over the desktop ({@code area} in GUI units, or null for nothing), see {@link #kept}. */
+    private void keep(int[] area) {
+        if (area == null) return;
+        double scale = minecraft.getWindow().getGuiScale();
+        kept.add(new int[] {(int) Math.floor(area[0] * scale), (int) Math.floor(area[1] * scale),
+                (int) Math.ceil(area[2] * scale), (int) Math.ceil(area[3] * scale)});
     }
 
     private void drawHints(GuiGraphics g) {
         long now = Util.getMillis();
-        if (now < flashUntil) {
-            drawBanner(g, 8, 0xFFFFFF, flash);
-        } else if (now < hintUntil) {
+        if (now < flashUntil + FADE_MILLIS) {
+            drawBanner(g, 8, 0xFFFFFF, fade(now, flashUntil), flash);
+        } else if (now < hintUntil + FADE_MILLIS) {
+            int alpha = fade(now, hintUntil);
             Component scaling = DesktopConfig.scaling.label();
             Component controlling = Component.translatable("desktopscreens.hint.controlling", shorten(session.sourceLabel()));
             if (session.inWorld()) {
-                drawBanner(g, 8, 0xFFFFFF, controlling, hostKeys("desktopscreens.hint.in_world_keys"));
+                drawBanner(g, 8, 0xFFFFFF, alpha, controlling, hostKeys("desktopscreens.hint.in_world_keys"));
             } else if (session.clickingThrough()) {
-                drawBanner(g, 8, 0xFFFFFF, controlling,
+                drawBanner(g, 8, 0xFFFFFF, alpha, controlling,
                         Component.translatable("desktopscreens.hint.in_place"),
                         hostKeys("desktopscreens.hint.in_place_keys"));
             } else {
-                drawBanner(g, 8, 0xFFFFFF, controlling,
+                drawBanner(g, 8, 0xFFFFFF, alpha, controlling,
                         hostKeys("desktopscreens.hint.keys"),
                         Component.translatable("desktopscreens.hint.view_keys", DesktopClient.plus("S"), scaling, DesktopClient.plus("F"),
                                 Component.translatable(DesktopConfig.framed ? "desktopscreens.view.framed_short" : "desktopscreens.view.fullscreen"),
@@ -723,14 +821,26 @@ public final class DesktopScreen extends Screen {
         return Component.translatable(langKey, DesktopClient.hostKey(), DesktopClient.plus("O"), DesktopClient.plus("M"), DesktopClient.plus("W"));
     }
 
-    private void drawBanner(GuiGraphics g, int y, int color, Component... lines) {
+    /**
+     * 255 while {@code until} is still ahead, then down to 0 over FADE_MILLIS. Not while the game window is cut open
+     * around the banner: its part of the window would fade to black, then vanish. Gone at once then.
+     */
+    private int fade(long now, long until) {
+        if (session.cuttingHole()) return now < until ? 255 : 0;
+        return now < until ? 255 : (int) Math.max(0, 255 - (now - until) * 255 / FADE_MILLIS);
+    }
+
+    /** Lines in a dark box, centered, {@code alpha} (0-255) as opaque as they are by now. */
+    private void drawBanner(GuiGraphics g, int y, int rgb, int alpha, Component... lines) {
+        if (alpha < 4) return; // Minecraft's font drew alpha below 4 fully opaque
         int w = 0;
         for (Component line : lines) w = Math.max(w, font.width(line));
         w += 16;
         int lineStep = font.lineHeight + 3;
-        g.fill((width - w) / 2, y - 4, (width + w) / 2, y + lines.length * lineStep + 1, 0xC0000000);
+        g.fill((width - w) / 2, y - 4, (width + w) / 2, y + lines.length * lineStep + 1, (0xC0 * alpha / 255) << 24);
+        keep(new int[] {(width - w) / 2, y - 4, (width + w) / 2, y + lines.length * lineStep + 1});
         for (int i = 0; i < lines.length; i++) {
-            g.drawCenteredString(font, lines[i], width / 2, y + i * lineStep, color);
+            GuiDraw.centeredText(g, font, lines[i], width / 2, y + i * lineStep, alpha << 24 | rgb);
         }
     }
 
@@ -756,6 +866,10 @@ public final class DesktopScreen extends Screen {
         session.close();
         FocusHandOff.end();
         CameraGlide.stop();
+        //? if >=26.2 {
+        /*if (hidGui && minecraft.gui.hud.isHidden() != hideGuiBefore) minecraft.gui.hud.toggle();
+        *///?} else {
         if (hidGui) minecraft.options.hideGui = hideGuiBefore;
+        //?}
     }
 }

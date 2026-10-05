@@ -1,5 +1,6 @@
 package com.desktopscreens.client;
 
+import com.desktopscreens.Players;
 import com.desktopscreens.ScreenBlockEntity;
 import com.desktopscreens.ScreenSharing;
 import com.desktopscreens.ShareScreen;
@@ -14,7 +15,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.util.FormattedCharSequence;
 
 import java.util.ArrayList;
@@ -71,8 +71,12 @@ final class SharingPage {
         switched = false;
         int soundWidth = 60;
         add.accept(CycleButton.booleanBuilder(Component.translatable("desktopscreens.share.scope_all"),
+                        //? if >=26.1 {
+                        /*Component.translatable("desktopscreens.share.scope_screen"), allScreens)
+                        *///?} else {
                         Component.translatable("desktopscreens.share.scope_screen"))
                 .withInitialValue(allScreens)
+                        //?}
                 .displayOnlyValue()
                 .withTooltip(value -> Tooltip.create(Component.translatable("desktopscreens.share.scope.tooltip")))
                 .create(x, y, w - soundWidth - 4, 20, Component.translatable("desktopscreens.share.scope"), (button, value) -> {
@@ -91,9 +95,9 @@ final class SharingPage {
         introY = y;
         intro = font.split(Component.translatable(allScreens ? "desktopscreens.share.intro_all" : "desktopscreens.share.intro_screen"), w);
         y += intro.size() * 10 + 4;
-        nameBox = new EditBox(font, x + 1, y + 1, w - 48, 18, Component.translatable("desktopscreens.share.name"));
+        nameBox = new FilteredBox(font, x + 1, y + 1, w - 48, 18, Component.translatable("desktopscreens.share.name"),
+                text -> text.matches("[A-Za-z0-9_]*"));
         nameBox.setMaxLength(ShareScreen.MAX_NAME);
-        nameBox.setFilter(text -> text.matches("[A-Za-z0-9_]*"));
         nameBox.setValue(typed);
         nameBox.setHint(Component.translatable("desktopscreens.share.name").withStyle(ChatFormatting.DARK_GRAY));
         nameBox.setResponder(text -> {
@@ -140,12 +144,12 @@ final class SharingPage {
 
     /** The text around the widgets. Drawn before them. */
     void render(GuiGraphics g, Font font, int x) {
-        for (int i = 0; i < intro.size(); i++) g.drawString(font, intro.get(i), x, introY + i * 10, 0xB0B0B0);
-        if (status != null) g.drawString(font, status, x, statusY, 0xFF7070);
-        g.drawString(font, Component.translatable(shown.isEmpty() ? "desktopscreens.share.nobody" : "desktopscreens.share.list"),
+        for (int i = 0; i < intro.size(); i++) GuiDraw.text(g, font, intro.get(i), x, introY + i * 10, 0xB0B0B0);
+        if (status != null) GuiDraw.text(g, font, status, x, statusY, 0xFF7070);
+        GuiDraw.text(g, font, Component.translatable(shown.isEmpty() ? "desktopscreens.share.nobody" : "desktopscreens.share.list"),
                 x, listLabelY, 0xE0E0E0);
-        for (int i = 0; i < rowNames.size(); i++) g.drawString(font, rowNames.get(i), x, rowsY + i * ROW + 4, 0xFFFFFF);
-        if (more > 0) g.drawString(font, Component.translatable("desktopscreens.share.more", more), x, moreY, 0xB0B0B0);
+        for (int i = 0; i < rowNames.size(); i++) GuiDraw.text(g, font, rowNames.get(i), x, rowsY + i * ROW + 4, 0xFFFFFF);
+        if (more > 0) GuiDraw.text(g, font, Component.translatable("desktopscreens.share.more", more), x, moreY, 0xB0B0B0);
     }
 
     /**
@@ -179,8 +183,8 @@ final class SharingPage {
         if (mc.getConnection() != null && mc.player != null) {
             List<String> online = new ArrayList<>();
             for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
-                String name = info.getProfile().getName();
-                if (info.getProfile().getId().equals(mc.player.getUUID()) || contains(shared, name)) continue;
+                String name = Players.name(info.getProfile());
+                if (Players.id(info.getProfile()).equals(mc.player.getUUID()) || contains(shared, name)) continue;
                 if (name.toLowerCase(Locale.ROOT).startsWith(prefix)) online.add(name);
             }
             online.sort(String.CASE_INSENSITIVE_ORDER);
@@ -205,19 +209,19 @@ final class SharingPage {
         if (mc.getConnection() == null || mc.player == null) return;
         PlayerInfo info = null;
         for (PlayerInfo p : mc.getConnection().getOnlinePlayers()) {
-            if (p.getProfile().getName().equalsIgnoreCase(name)) info = p;
+            if (Players.name(p.getProfile()).equalsIgnoreCase(name)) info = p;
         }
         List<String> shared = sharedNames();
         if (info == null) {
             status = Component.translatable("desktopscreens.share.not_online", name);
-        } else if (info.getProfile().getId().equals(mc.player.getUUID())) {
+        } else if (Players.id(info.getProfile()).equals(mc.player.getUUID())) {
             status = Component.translatable("desktopscreens.share.yourself");
         } else if (contains(shared, name)) {
-            status = Component.translatable("desktopscreens.share.already", info.getProfile().getName());
+            status = Component.translatable("desktopscreens.share.already", Players.name(info.getProfile()));
         } else if (shared.size() >= ScreenSharing.MAX_WATCHERS) {
             status = Component.translatable("desktopscreens.share.full", ScreenSharing.MAX_WATCHERS);
         } else {
-            send(info.getProfile().getName(), true);
+            send(Players.name(info.getProfile()), true);
             typed = "";
             nameBox.setValue(""); // also clears the status, through the responder
         }
@@ -228,7 +232,7 @@ final class SharingPage {
     }
 
     private void send(String name, boolean add) {
-        mc.getConnection().send(new ServerboundCustomPayloadPacket(new ShareScreen(screen.anchor(), name, add, allScreens)));
+        ClientNet.toServer(mc.getConnection(), new ShareScreen(screen.anchor(), name, add, allScreens));
     }
 
     private static boolean contains(List<String> names, String name) {

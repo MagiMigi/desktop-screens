@@ -2,10 +2,47 @@
 # being built (["1.21.1"], [neoforge."1.21.1"]); the build scripts read the keys as sc.properties["..."].
 # Mod-wide settings (name, version, author) are in gradle.properties.
 
+["1.20.1"]
+java = "17"
+# Minecraft versions the jar says it runs on, for NeoForge and Forge: exactly the one it was built for.
+mod.minecraft_range = "[1.20.1]"
+# The resource pack format of this version (pack.mcmeta).
+mod.pack_format = "15"
+# The folders in src/data (separated by spaces) with the recipes, loot tables and tags in this version's format.
+mod.data = "1.20.1"
+deps.parchment_minecraft = "1.20.1"
+deps.parchment = "2023.09.03"
+
+[fabric."1.20.1"]
+deps.fabric_api = "0.92.12+1.20.1"
+deps.fabric_loader = "0.19.5"
+deps.fabric_loader_min = "0.16.0"
+deps.modmenu = "7.2.2"
+deps.common_protection = "1.0.0"
+deps.architectury = "9.2.14"
+deps.opac = "fabric-1.20.1-0.31.6"
+deps.ftb_chunks = "2001.3.8"
+deps.forge_config_api_port = "v8.0.3-1.20.1-Fabric"
+deps.flan = "1.20.1-1.11.16-fabric"
+
+[forge."1.20.1"]
+# https://files.minecraftforge.net
+deps.forge = "1.20.1-47.4.23"
+# Oldest Forge players may use. Kept low on purpose: modpacks often lag behind the latest.
+deps.forge_range = "[47,)"
+deps.forge_loader_range = "[47,)"
+deps.opac = "forge-1.20.1-0.31.6"
+deps.ftb_chunks = "2001.3.8"
+deps.ftb_teams = "2001.3.1"
+deps.ftb_library = "2001.2.9"
+deps.architectury = "9.2.14"
+deps.mixinextras = "0.4.1"
+
 ["1.21.1"]
 java = "21"
-# Minecraft versions the jar says it runs on, for NeoForge and Forge: exactly the one it was built for.
 mod.minecraft_range = "[1.21.1]"
+mod.pack_format = "34"
+mod.data = "1.21.1"
 # https://parchmentmc.org/docs/getting-started
 deps.parchment_minecraft = "1.21.1"
 deps.parchment = "2024.11.17"
@@ -36,3 +73,98 @@ deps.neoforge_loader_range = "[4,)"
 # Land-claim mods for our test game (-Pclaims=...).
 deps.opac = "neoforge-1.21.1-0.31.6"
 deps.ftb_chunks = "2101.1.22"
+
+["26.1.2"]
+java = "25"
+mod.minecraft_range = "[26.1.2]"
+# Not used: from 26.1 on the jars have no pack.mcmeta (both loaders make one; a mod's resources and data now have
+# different formats, 84 and 101).
+mod.pack_format = "84"
+# Also holds this version's item definitions (assets/.../items) and its own GUI shader.
+mod.data = "26.1"
+
+[fabric."26.1.2"]
+deps.fabric_api = "0.155.3+26.1.2"
+deps.fabric_loader = "0.19.5"
+deps.fabric_loader_min = "0.18.4"
+deps.modmenu = "18.0.2"
+deps.common_protection = "2.0.0"
+deps.architectury = "20.1.16"
+deps.opac = "fabric-26.1.2-0.31.6"
+deps.ftb_chunks = "26.1.2.8"
+# FTB Chunks left Architectury in 26.1: we ask its own API before placing, so we compile against it and FTB Library.
+deps.ftb_library = "26.1.2.7"
+# Modrinth's id of version 26.1.5 for Fabric (the same number exists for each loader).
+deps.forge_config_api_port = "jUe0ucoE"
+deps.flan = "26.1.2-1.12.8-fabric"
+
+[neoforge."26.1.2"]
+deps.neoforge = "26.1.2.112"
+deps.neoforge_range = "[26.1.2.0,)"
+deps.neoforge_loader_range = "[1,)"
+deps.opac = "neoforge-26.1.2-0.31.6"
+deps.ftb_chunks = "26.1.2.8"
+
+["26.2"]
+java = "25"
+mod.minecraft_range = "[26.2]"
+# Not used (see 26.1.2).
+mod.pack_format = "84"
+# 26.1's data, and the shader 26.2 needs to unpack pictures.
+mod.data = "26.1 26.2"
+
+[fabric."26.2"]
+deps.fabric_api = "0.161.0+26.2"
+deps.fabric_loader = "0.19.5"
+deps.fabric_loader_min = "0.18.4"
+deps.modmenu = "20.0.3"
+deps.common_protection = "2.0.0"
+deps.architectury = "21.1.11"
+deps.opac = "fabric-26.2-0.31.6"
+# FTB Chunks has no 26.2 yet (2026-10-02): compiled against 26.1.2's API, not tried in the game.
+deps.ftb_chunks = "26.1.2.8"
+deps.ftb_library = "26.1.2.7"
+# Modrinth's id of version 26.2.1 for Fabric.
+deps.forge_config_api_port = "rSd3GiG8"
+deps.flan = "26.2-1.12.8-fabric"
+
+[neoforge."26.2"]
+deps.neoforge = "26.2.0.88"
+deps.neoforge_range = "[26.2.0.0,)"
+deps.neoforge_loader_range = "[1,)"
+deps.opac = "neoforge-26.2-0.31.6"
+deps.ftb_chunks = "26.1.2.8"
+
+["26.3"]
+java = "25"
+mod.minecraft_range = "[26.3]"
+# Not used (see 26.1.2).
+mod.pack_format = "84"
+# Its own: loot tables and advancements changed format, and shaders their syntax.
+mod.data = "26.3"
+
+[fabric."26.3"]
+deps.fabric_api = "0.161.0+26.3"
+deps.fabric_loader = "0.19.5"
+deps.fabric_loader_min = "0.18.4"
+deps.modmenu = "21.0.0"
+deps.common_protection = "2.0.0"
+deps.architectury = "22.0.3"
+deps.opac = "fabric-26.3-0.31.6"
+# FTB Chunks has no 26.3 yet (2026-10-02): compiled against 26.1.2's API, not tried in the game.
+deps.ftb_chunks = "26.1.2.8"
+deps.ftb_library = "26.1.2.7"
+# Modrinth's id of version 26.3.1 for Fabric.
+deps.forge_config_api_port = "JpKvrr9J"
+# 1.12.8 (not .b) hooks an old Player.drop and stops the game; .b fixes its Fabric mixins.
+deps.flan = "26.3-1.12.8.b-fabric"
+
+[neoforge."26.3"]
+# Still beta (2026-10-02).
+deps.neoforge = "26.3.0.41-beta"
+deps.neoforge_range = "[26.3.0.0-beta,)"
+deps.neoforge_loader_range = "[1,)"
+# OPAC 0.31.6 stops NeoForge 26.3.0.41-beta at startup (it asks for a config type that beta dropped); Flan instead.
+deps.opac = "neoforge-26.3-0.31.6"
+deps.flan = "26.3-1.12.8-neoforge"
+deps.ftb_chunks = "26.1.2.8"

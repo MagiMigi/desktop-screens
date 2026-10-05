@@ -1,6 +1,7 @@
 package com.desktopscreens.client;
 
 import com.desktopscreens.DesktopScreens;
+import com.desktopscreens.Players;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 
@@ -99,7 +100,7 @@ final class ShareTiming {
             }
             if (pictures == 0 && sounds == 0) continue;
             PlayerInfo info = mc.getConnection() != null ? mc.getConnection().getPlayerInfo(e.getKey()) : null;
-            String name = info != null ? info.getProfile().getName() : "?";
+            String name = info != null ? Players.name(info.getProfile()) : "?";
             long picture = pictures > 0 ? pictureSum / pictures : 0, sound = sounds > 0 ? soundSum / sounds : 0;
             boolean onePc = (pictures == 0 || plausible(picture)) && (sounds == 0 || plausible(sound));
             StringBuilder line = new StringBuilder("Shared screen from ").append(name).append(", timing: ");

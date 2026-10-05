@@ -7,7 +7,6 @@ import com.desktopscreens.core.Monitors;
 import com.desktopscreens.core.Win32;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
-import org.lwjgl.glfw.GLFWNativeWin32;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -30,7 +29,7 @@ final class WorldScreens {
      * to show, in desktop pixels, and where the game itself shows in it ({@link GameCover}), or null. A new one every
      * frame.
      */
-    record Picture(RenderType renderType, int textureId, int frameWidth, int frameHeight, int cropX, int cropY, int cropW, int cropH, int[] game) {}
+    record Picture(RenderType renderType, DesktopTexture texture, int frameWidth, int frameHeight, int cropX, int cropY, int cropW, int cropH, int[] game) {}
 
     /** One thing shown on screens: a monitor, or one window on it. */
     private static final class View {
@@ -116,7 +115,7 @@ final class WorldScreens {
                 view.stats.frame("showing " + view.window, "Graphics Capture", lw.averageMillis());
                 if (uploadNanos > 0) view.stats.uploaded(uploadNanos);
                 int w = lw.frameWidth(), h = lw.frameHeight();
-                return w == 0 ? null : new Picture(lw.renderType(), lw.textureId(), w, h, 0, 0, w, h, null);
+                return w == 0 ? null : new Picture(lw.renderType(), lw.texture(), w, h, 0, 0, w, h, null);
             }
             DesktopScreens.LOG.info("Screens in the world: {} can't be captured by itself; showing its part of {} instead", view.window, wanted);
             view.cutOut = true;
@@ -143,9 +142,9 @@ final class WorldScreens {
             Monitor m = live.monitor();
             int x = Math.max(0, area[0] - m.x), y = Math.max(0, area[1] - m.y);
             int right = Math.min(w, area[2] - m.x), bottom = Math.min(h, area[3] - m.y);
-            if (right > x && bottom > y) return new Picture(live.renderType(), live.textureId(), w, h, x, y, right - x, bottom - y, live.gameArea());
+            if (right > x && bottom > y) return new Picture(live.renderType(), live.texture(), w, h, x, y, right - x, bottom - y, live.gameArea());
         }
-        return new Picture(live.renderType(), live.textureId(), w, h, 0, 0, w, h, live.gameArea());
+        return new Picture(live.renderType(), live.texture(), w, h, 0, 0, w, h, live.gameArea());
     }
 
     /**
@@ -187,7 +186,7 @@ final class WorldScreens {
         Monitor m = live.monitor();
         int x = Math.max(0, area[0] - m.x), y = Math.max(0, area[1] - m.y);
         int right = Math.min(w, area[2] - m.x), bottom = Math.min(h, area[3] - m.y);
-        return right > x && bottom > y ? new Picture(live.renderType(), live.textureId(), w, h, x, y, right - x, bottom - y, live.gameArea()) : null;
+        return right > x && bottom > y ? new Picture(live.renderType(), live.texture(), w, h, x, y, right - x, bottom - y, live.gameArea()) : null;
     }
 
     /**
@@ -202,7 +201,7 @@ final class WorldScreens {
         if (view.window == null && !view.windowKey.isEmpty()) view.window = AppWindow.find(view.windowKey, view.windowHandle);
         Monitor on = view.window != null ? Monitors.of(view.window.handle()) : null;
         if (on == null) on = Monitors.byName(view.monitorName);
-        if (on == null) on = Monitors.defaultTarget(Monitors.of(GLFWNativeWin32.glfwGetWin32Window(mc.getWindow().getWindow())));
+        if (on == null) on = Monitors.defaultTarget(Monitors.of(GameWindow.hwnd(mc)));
         view.monitor = on;
         return on;
     }

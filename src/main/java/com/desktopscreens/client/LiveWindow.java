@@ -6,7 +6,6 @@ import com.desktopscreens.core.WindowCapture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
-import org.lwjgl.glfw.GLFWNativeWin32;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,7 +32,7 @@ final class LiveWindow {
     private LiveWindow(Minecraft mc, AppWindow window) {
         this.mc = mc;
         this.window = window;
-        gameWindow = GLFWNativeWin32.glfwGetWin32Window(mc.getWindow().getWindow());
+        gameWindow = GameWindow.hwnd(mc);
         location = DesktopScreens.id("window/" + nextId++);
         mc.getTextureManager().register(location, texture);
         renderType = PictureRenderType.of(location);
@@ -98,8 +97,8 @@ final class LiveWindow {
         return renderType;
     }
 
-    int textureId() {
-        return texture.getId();
+    DesktopTexture texture() {
+        return texture;
     }
 
     int frameWidth() {

@@ -20,6 +20,10 @@ import com.sun.jna.ptr.PointerByReference;
 import com.sun.jna.win32.StdCallLibrary;
 import com.sun.jna.win32.W32APIOptions;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 /** Win32 calls that jna-platform lacks (or that are simpler with our own types), and small helpers around them. */
 public final class Win32 {
     /** Everything in this package needs Windows. Check this before touching any other class here. */
@@ -84,6 +88,7 @@ public final class Win32 {
 
         int DwmGetWindowAttribute(HWND hwnd, int attribute, RECT value, int size);
         int DwmGetWindowAttribute(HWND hwnd, int attribute, IntByReference value, int size);
+        int DwmSetWindowAttribute(HWND hwnd, int attribute, IntByReference value, int size);
     }
 
     public interface G32 extends StdCallLibrary {
@@ -96,6 +101,7 @@ public final class Win32 {
         boolean DeleteObject(HANDLE obj);
         boolean DeleteDC(HDC hdc);
         boolean GdiFlush();
+        int GetObject(HANDLE obj, int size, BITMAP bitmap);
     }
 
     @Structure.FieldOrder({"cbSize", "flags", "hCursor", "ptScreenPos"})
@@ -108,6 +114,13 @@ public final class Win32 {
         public CURSORINFO() {
             cbSize = size();
         }
+    }
+
+    @Structure.FieldOrder({"bmType", "bmWidth", "bmHeight", "bmWidthBytes", "bmPlanes", "bmBitsPixel", "bmBits"})
+    public static class BITMAP extends Structure {
+        public int bmType, bmWidth, bmHeight, bmWidthBytes;
+        public short bmPlanes, bmBitsPixel;
+        public Pointer bmBits;
     }
 
     @Structure.FieldOrder({"fIcon", "xHotspot", "yHotspot", "hbmMask", "hbmColor"})
@@ -204,14 +217,28 @@ public final class Win32 {
         /** The desktop itself, which spans every monitor: it's on the one it was clicked on. */
         DESKTOP,
         /** A window that's minimized, so it isn't on any monitor yet. */
-        NOWHERE
+        NOWHERE,
+        /**
+         * Windows' own switcher (Alt+Tab, the task view): a window is being picked. It sits on the main monitor, so a
+         * fullscreen game there minimized before anything was picked (2026-10-03); wait for the window picked.
+         */
+        PICKING
     }
+
+    /**
+     * The windows that hold the focus while another one is picked: the Alt+Tab switcher and the task view of Windows 11
+     * (XamlExplorerHostIslandWindow) and 10 (MultitaskingViewFrame), the classic Alt+Tab, and the window Explorer hands
+     * the focus through on the way (ForegroundStaging). All Explorer's.
+     */
+    private static final Set<String> SWITCHERS = new HashSet<String>(Arrays.asList(
+            "XamlExplorerHostIslandWindow", "MultitaskingViewFrame", "TaskSwitcherWnd", "TaskSwitcherOverlayWnd", "ForegroundStaging"));
 
     public static Front front(long game, Monitor m) {
         HWND fg = U32.I.GetForegroundWindow();
         if (fg == null || fg.equals(hwnd(game))) return Front.GAME;
         String cls = AppWindow.className(fg);
         if (cls.equals("Progman") || cls.equals("WorkerW")) return Front.DESKTOP;
+        if (SWITCHERS.contains(cls) && "explorer.exe".equalsIgnoreCase(AppWindow.exeName(fg))) return Front.PICKING;
         if (U32.I.IsIconic(fg)) return Front.NOWHERE;
         return AppWindow.rectOn(fg, m) != null ? Front.SAME_MONITOR : Front.OTHER_MONITOR;
     }

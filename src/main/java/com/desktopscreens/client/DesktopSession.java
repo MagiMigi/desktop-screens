@@ -8,17 +8,27 @@ import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
 import com.desktopscreens.core.Win32;
 import com.mojang.blaze3d.platform.Window;
+//? if >=26.1 {
+/*import com.mojang.blaze3d.pipeline.RenderPipeline;
+import net.minecraft.client.gui.render.TextureSetup;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import org.joml.Matrix3x2f;
+*///?} else {
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.ShaderInstance;
 import org.joml.Matrix4f;
-import org.lwjgl.glfw.GLFWNativeWin32;
+//?}
+//? if >=26.2 {
+/*import com.mojang.blaze3d.systems.RenderSystem;
+*///?}
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+
+import java.util.List;
 
 /** Everything one open desktop view needs: capture, texture and the mouse/keyboard handover. */
 final class DesktopSession {
@@ -36,6 +46,8 @@ final class DesktopSession {
     private boolean closed;
     /** Only while controlling the game's own monitor. */
     private ClickThrough clickThrough;
+    /** Where the in-place view needs the game window cut open this frame (window pixels), if it's cut ({@link #cutsHole}). */
+    private int[] inPlaceHole;
     /**
      * Just one window instead of the whole monitor (Right Ctrl + W), or null. The picture is the monitor's, cut down
      * to the window, so its menus and dialogs show wherever they fall inside it.
@@ -98,7 +110,7 @@ final class DesktopSession {
 
     /** A desktop view showing {@code choice} (a screen's, while it's used), and changing it. */
     static DesktopSession open(Minecraft mc, SourceChoice choice) {
-        long gameWindow = GLFWNativeWin32.glfwGetWin32Window(mc.getWindow().getWindow());
+        long gameWindow = GameWindow.hwnd(mc);
         Monitor game = Monitors.of(gameWindow);
         Monitor saved = Monitors.byName(choice.monitor); // null if it was unplugged or never chosen
         AppWindow savedWindow = AppWindow.find(choice.window, choice.handle); // null if it isn't open
@@ -109,7 +121,7 @@ final class DesktopSession {
         Window mcWindow = mc.getWindow();
         int host = DesktopClient.hostScancode();
         DesktopScreens.LOG.info("Desktop view opened: game {}x{}{} on {}, fps limit {}, vsync {}{}{}", mcWindow.getWidth(), mcWindow.getHeight(),
-                mcWindow.isFullscreen() ? " fullscreen" : "", game, mc.options.framerateLimit().get(), mc.options.enableVsync().get(),
+                mc.getWindow().isFullscreen() ? " fullscreen" : "", game, mc.options.framerateLimit().get(), mc.options.enableVsync().get(),
                 savedWindow != null ? ", showing one window: " + savedWindow : "",
                 host > 0 && host != DesktopInput.DEFAULT_HOST_KEY
                         ? String.format(", host key %s (scan code 0x%X)", DesktopClient.hostKeyName().getString(), host) : "");
@@ -214,6 +226,33 @@ final class DesktopSession {
         return clickThrough != null;
     }
 
+    /** True while the in-place view cuts its hole into the game window ({@link #cutsHole}). */
+    boolean cuttingHole() {
+        return clickThrough != null && cutsHole();
+    }
+
+    /**
+     * Whether the in-place view cuts a hole into the game window, rather than drawing the see-through color: Minecraft
+     * 26.2 can draw with Vulkan, and that skipped the color key on the test PC (2026-10-02). With OpenGL, the color
+     * key as before.
+     */
+    private static boolean cutsHole() {
+        //? if >=26.2 {
+        /*return !"OpenGL".equals(RenderSystem.getDevice().getDeviceInfo().backendName());
+        *///?} else {
+        return false;
+        //?}
+    }
+
+    /**
+     * After the screen has drawn this frame: cuts the game window open where {@link #drawInPlace} wants it, keeping
+     * {@code keep} (what was drawn over the hole, in window pixels). Only when cutting holes.
+     */
+    void shapeWindow(List<int[]> keep) {
+        if (!cuttingHole()) return;
+        clickThrough.shape(inPlaceHole != null ? inPlaceHole : new int[4], keep);
+    }
+
     /** True for the monitor Minecraft itself is on. */
     boolean isGameMonitor(Monitor m) {
         return m.sameAs(gameMonitor);
@@ -311,7 +350,8 @@ final class DesktopSession {
         clickThrough = new ClickThrough(gameWindow);
         live.setPausedForView(true); // the real screen shows through the game window now, see drawInPlace
         LiveCapture.hideGameAgain(gameWindow);
-        DesktopScreens.LOG.info("Clicks now go through the game window to the apps behind it ({})", clickThrough);
+        DesktopScreens.LOG.info("Clicks now go through the game window to the apps behind it ({}{})", clickThrough,
+                cutsHole() ? "; the see-through part is cut out of the window, as the color key doesn't work with Vulkan" : "");
     }
 
     private void stopClickThrough() {
@@ -325,6 +365,7 @@ final class DesktopSession {
 
     /** The desktop view itself: draws over the whole window. Nothing while using a screen in the world. */
     void draw(GuiGraphics g) {
+        inPlaceHole = null;
         if (inWorld) {
             trackWindow(); // the screen in the world draws the picture, and times it
             return;
@@ -424,9 +465,9 @@ final class DesktopSession {
                 srcH = p.srcH();
             }
         }
-        float toGui = (float) (1 / mc.getWindow().getGuiScale());
-        g.pose().pushPose();
-        g.pose().scale(toGui, toGui, 1);
+        float toGui = (float) (1.0 / mc.getWindow().getGuiScale());
+        GuiDraw.push(g);
+        GuiDraw.scale(g, toGui, toGui);
         drawPicture(g, x, y, w, h, crop[0] + srcX, crop[1] + srcY, srcW, srcH, scaling != Scaling.SMOOTH);
         int[] cover = GameCover.place(live.gameArea(), crop[0] + srcX, crop[1] + srcY, srcW, srcH, x, y, w, h);
         if (cover != null) GameCover.drawGui(g, cover);
@@ -434,7 +475,7 @@ final class DesktopSession {
         int left = Math.max(areaX, x - border), top = Math.max(areaY, y - border);
         int right = Math.min(areaX + areaW, x + w + border), bottom = Math.min(areaY + areaH, y + h + border);
         BorderRenderer.draw(g, left + border, top + border, right - left - 2 * border, bottom - top - 2 * border);
-        g.pose().popPose();
+        GuiDraw.pop(g);
     }
 
     /**
@@ -443,7 +484,8 @@ final class DesktopSession {
      * where you click, live, and protected video plays too, which a captured picture would show black. Nothing is
      * captured meanwhile. Works in windowed mode too. The border goes over the window's edge, as a reminder that
      * this is still the game. With one window shown, only that window is see-through, the world shows around it,
-     * and the border goes around the window.
+     * and the border goes around the window. Where the color key is skipped (Vulkan), the same part is cut out of
+     * the window instead ({@link #shapeWindow}).
      */
     private void drawInPlace(GuiGraphics g) {
         Window mcWindow = mc.getWindow();
@@ -454,22 +496,28 @@ final class DesktopSession {
         int left = Math.max(0, hole[0] - origin[0]), top = Math.max(0, hole[1] - origin[1]);
         int right = Math.min(mcWindow.getWidth(), hole[2] - origin[0]), bottom = Math.min(mcWindow.getHeight(), hole[3] - origin[1]);
         if (right <= left || bottom <= top) return;
-        float toGui = (float) (1 / mcWindow.getGuiScale());
-        g.pose().pushPose();
-        g.pose().scale(toGui, toGui, 1);
+        float toGui = (float) (1.0 / mcWindow.getGuiScale());
+        GuiDraw.push(g);
+        GuiDraw.scale(g, toGui, toGui);
         g.fill(left, top, right, bottom, 0xFF000000 | ClickThrough.SEE_THROUGH_RGB);
         int border = BorderRenderer.thickness();
         if (oneWindow) BorderRenderer.draw(g, left, top, right - left, bottom - top);
         else BorderRenderer.draw(g, border, border, mcWindow.getWidth() - 2 * border, mcWindow.getHeight() - 2 * border);
-        g.pose().popPose();
+        GuiDraw.pop(g);
+        // When the hole is cut instead (shapeWindow), the border stays: around the window, or along the game window's edges.
+        inPlaceHole = oneWindow ? new int[] {left, top, right, bottom}
+                : new int[] {Math.max(left, border), Math.max(top, border),
+                        Math.min(right, mcWindow.getWidth() - border), Math.min(bottom, mcWindow.getHeight() - border)};
     }
 
     /** Draws the {@code src} part of the frame (desktop pixels) into a rectangle in window pixels. */
     private void drawPicture(GuiGraphics g, int x, int y, int w, int h, double srcX, double srcY, double srcW, double srcH, boolean sharp) {
         int frameWidth = live.frameWidth(), frameHeight = live.frameHeight();
-        if (!drawPicture(g, live.textureId(), frameWidth, frameHeight, x, y, w, h, srcX, srcY, srcW, srcH, sharp)) {
+        if (!drawPicture(g, live.texture(), frameWidth, frameHeight, x, y, w, h, srcX, srcY, srcW, srcH, sharp)) {
+            //? if <26.1 {
             g.blit(live.location(), x, y, w, h, (float) srcX, (float) srcY, (int) Math.round(srcW), (int) Math.round(srcH),
                     frameWidth, frameHeight);
+            //?}
         }
     }
 
@@ -478,25 +526,34 @@ final class DesktopSession {
      * a rectangle, with the desktop shader ({@link Scaling}): for the desktop view, its settings preview and
      * picture-in-picture. False if the shader isn't there (it failed to load), and nothing was drawn.
      */
-    static boolean drawPicture(GuiGraphics g, int textureId, int frameWidth, int frameHeight, int x, int y, int w, int h,
+    static boolean drawPicture(GuiGraphics g, DesktopTexture texture, int frameWidth, int frameHeight, int x, int y, int w, int h,
                                double srcX, double srcY, double srcW, double srcH, boolean sharp) {
+        float u0 = (float) (srcX / frameWidth), v0 = (float) (srcY / frameHeight);
+        float u1 = (float) ((srcX + srcW) / frameWidth), v1 = (float) ((srcY + srcH) / frameHeight);
+        //? if >=26.1 {
+        /*// Without the sharp shader (smooth scaling, or it didn't compile), Minecraft's own: plain bilinear.
+        RenderPipeline pipeline = sharp ? DesktopShaders.sharp() : null;
+        if (pipeline == null) pipeline = RenderPipelines.GUI_TEXTURED;
+        GuiDraw.submit(g, new BlitRenderState(pipeline, TextureSetup.singleTexture(texture.getTextureView(), texture.getSampler()),
+                new Matrix3x2f(g.pose()), x, y, x + w, y + h, u0, u1, v0, v1, 0xFFFFFFFF, GuiDraw.scissor(g)));
+        return true;
+        *///?} else {
         ShaderInstance shader = DesktopShaders.desktop;
         if (shader == null) return false;
         Matrix4f pose = g.pose().last().pose();
         RenderSystem.setShader(() -> shader);
-        RenderSystem.setShaderTexture(0, textureId);
+        RenderSystem.setShaderTexture(0, texture.getId());
         shader.safeGetUniform("TexSize").set((float) frameWidth, (float) frameHeight);
         shader.safeGetUniform("Scale").set((float) (w / srcW), (float) (h / srcH));
         shader.safeGetUniform("Sharp").set(sharp ? 1f : 0f);
-        float u0 = (float) (srcX / frameWidth), v0 = (float) (srcY / frameHeight);
-        float u1 = (float) ((srcX + srcW) / frameWidth), v1 = (float) ((srcY + srcH) / frameHeight);
-        BufferBuilder buffer = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        buffer.addVertex(pose, x, y, 0).setUv(u0, v0);
-        buffer.addVertex(pose, x, y + h, 0).setUv(u0, v1);
-        buffer.addVertex(pose, x + w, y + h, 0).setUv(u1, v1);
-        buffer.addVertex(pose, x + w, y, 0).setUv(u1, v0);
-        BufferUploader.drawWithShader(buffer.buildOrThrow());
+        BufferBuilder buffer = Vertices.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        Vertices.posUv(buffer, pose, x, y, 0, u0, v0);
+        Vertices.posUv(buffer, pose, x, y + h, 0, u0, v1);
+        Vertices.posUv(buffer, pose, x + w, y + h, 0, u1, v1);
+        Vertices.posUv(buffer, pose, x + w, y, 0, u1, v0);
+        Vertices.draw(buffer);
         return true;
+        //?}
     }
 
     /** The mouse pointer relative to the target monitor, in desktop pixels, or null if Windows won't say. */

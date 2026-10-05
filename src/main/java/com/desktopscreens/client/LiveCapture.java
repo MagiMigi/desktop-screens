@@ -11,7 +11,6 @@ import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import org.lwjgl.glfw.GLFWNativeWin32;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,7 +25,12 @@ final class LiveCapture {
     private static int nextId;
     /** How many open captures hid the game window from screen capture; it's shown again when the last one closes. */
     private static int hidingGame;
+    //? if >=1.20.5 {
     private static final SystemToast.SystemToastId NOTE = new SystemToast.SystemToastId(8000L);
+    //?} else {
+    /*// Notes can't choose how long they show before 1.20.5: this kind shows for 10 s.
+    private static final SystemToast.SystemToastIds NOTE = SystemToast.SystemToastIds.PERIODIC_NOTIFICATION;
+    *///?}
     /** The note about streams was shown in this world already. */
     private static boolean noted;
 
@@ -106,8 +110,14 @@ final class LiveCapture {
     private void noteHidden() {
         if (noted || mc.level == null) return;
         noted = true;
+        //? if >=26.2 {
+        /*// Toasts fit their lines to the text by themselves from 26.2 on.
+        mc.getToasts().addToast(new SystemToast(NOTE, Component.translatable("desktopscreens.stream.note.title"),
+                Component.translatable("desktopscreens.stream.note")));
+        *///?} else {
         mc.getToasts().addToast(SystemToast.multiline(mc, NOTE, Component.translatable("desktopscreens.stream.note.title"),
                 Component.translatable("desktopscreens.stream.note")));
+        //?}
         DesktopScreens.LOG.info("Said so in a note (once per world)");
     }
 
@@ -137,7 +147,7 @@ final class LiveCapture {
     static LiveCapture acquire(Minecraft mc, Monitor monitor) {
         LiveCapture live = OPEN.get(monitor.name);
         if (live == null) {
-            long gameWindow = GLFWNativeWin32.glfwGetWin32Window(mc.getWindow().getWindow());
+            long gameWindow = GameWindow.hwnd(mc);
             live = new LiveCapture(mc, gameWindow, monitor);
             OPEN.put(monitor.name, live);
         }
@@ -188,8 +198,8 @@ final class LiveCapture {
         return location;
     }
 
-    int textureId() {
-        return texture.getId();
+    DesktopTexture texture() {
+        return texture;
     }
 
     /** Draws this picture in the world: full bright, smooth when small. */

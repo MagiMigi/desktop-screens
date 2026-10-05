@@ -5,24 +5,43 @@ import com.desktopscreens.ScreenSharing;
 import com.desktopscreens.ShareStream;
 import com.desktopscreens.TabletItem;
 import com.desktopscreens.core.Win32;
+//? if >=26.3 {
+/*import com.desktopscreens.core.UsbScancodes;
+*///?}
 import com.mojang.blaze3d.platform.InputConstants;
+//? if >=26.2 {
+/*import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+*///?}
+//? if >=26.1 {
+/*import net.minecraft.world.phys.Vec3;
+*///?} else {
 import net.minecraft.client.Camera;
+//?}
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.AlertScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
+//? if <26.3 {
 import org.lwjgl.glfw.GLFW;
+//?}
 
 /**
  * Client entry point shared by both loaders. Loaders register the key mappings, call {@link #tick} every
  * client tick, and hook {@link #settingsScreen} up to their mods list.
  */
 public final class DesktopClient {
+    //? if >=1.21.9 {
+    /*/^* Our heading in Controls ("key.category.desktopscreens.main"); each loader registers it. ^/
+    public static final KeyMapping.Category CATEGORY = new KeyMapping.Category(DesktopScreens.id("main"));
+    *///?} else {
     private static final String CATEGORY = "key.categories.desktopscreens";
+    //?}
     public static final KeyMapping OPEN_KEY = new KeyMapping(
-            "key.desktopscreens.open", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, CATEGORY);
+            "key.desktopscreens.open", InputConstants.Type.KEYSYM, InputConstants.KEY_G, CATEGORY);
     /** Unbound by default; the settings are also one host key command away (Right Ctrl + O). */
     public static final KeyMapping SETTINGS_KEY = new KeyMapping(
             "key.desktopscreens.settings", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), CATEGORY);
@@ -35,7 +54,7 @@ public final class DesktopClient {
      * sits there), and neither do Macs running Windows.
      */
     public static final KeyMapping HOST_KEY = new KeyMapping(
-            "key.desktopscreens.host", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_CONTROL, CATEGORY);
+            "key.desktopscreens.host", InputConstants.Type.KEYSYM, InputConstants.KEY_RCONTROL, CATEGORY);
 
     /** The tablet was used; open once the use button (right-click) is let go. */
     private static boolean tabletPending;
@@ -86,6 +105,7 @@ public final class DesktopClient {
     }
 
     public static void tick(Minecraft mc) {
+        if (mc.screen instanceof DesktopScreen) Awake.now(mc); // using the desktop, or its settings
         FocusHandOff.tick(mc);
         FullscreenFocus.tick(mc);
         WorldScreens.tick(mc);
@@ -128,7 +148,12 @@ public final class DesktopClient {
 
     /** Whether the player carries a tablet anywhere in their inventory (the off hand too), so G opens the desktop. */
     static boolean hasTablet(Minecraft mc) {
-        return mc.player != null && mc.player.getInventory().contains(stack -> stack.getItem() instanceof TabletItem);
+        if (mc.player == null) return false;
+        Inventory inventory = mc.player.getInventory();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            if (inventory.getItem(i).getItem() instanceof TabletItem) return true;
+        }
+        return false;
     }
 
     private static void openDesktop(Minecraft mc) {
@@ -185,17 +210,30 @@ public final class DesktopClient {
         PictureInPicture.renderBehindMenu(Minecraft.getInstance(), screen, g);
     }
 
-    /** The Screen Builder's hologram. Loaders call it every frame, after the world's see-through parts are drawn. */
+    /**
+     * The Screen Builder's hologram. Loaders call it every frame, after the world's see-through parts are drawn; from
+     * 26.2 on, while the world's things are handed in to be drawn ({@code out}, with {@code pose} to place them).
+     */
+    //? if >=26.2 {
+    /*public static void renderWorld(Vec3 camera, SubmitNodeCollector out, PoseStack pose) {
+        ScreenBuilderClient.render(Minecraft.getInstance(), camera, out, pose);
+    }
+    *///?} else if >=26.1 {
+    /*public static void renderWorld(Vec3 camera) {
+        ScreenBuilderClient.render(Minecraft.getInstance(), camera);
+    }
+    *///?} else {
     public static void renderWorld(Camera camera) {
         ScreenBuilderClient.render(Minecraft.getInstance(), camera);
     }
+    //?}
 
     /** Keys in hints get their own color, so they stand out from the words. */
     private static final int KEY_COLOR = 0xFFD866;
 
     /** A key as the hints show it, before what it does: its name in brackets, in the key color, like "[G]". */
     static Component key(Component name) {
-        return Component.translatable("desktopscreens.key", name).withColor(KEY_COLOR);
+        return Component.translatable("desktopscreens.key", name).withStyle(s -> s.withColor(KEY_COLOR));
     }
 
     /** A Minecraft key as it's bound now, like "[G]" or "[RMB]". */
@@ -224,7 +262,7 @@ public final class DesktopClient {
      */
     static Component hostKeyName() {
         InputConstants.Key key = InputConstants.getKey(HOST_KEY.saveString());
-        if (hostScancode() <= 0 || key.getType() == InputConstants.Type.KEYSYM && key.getValue() == GLFW.GLFW_KEY_RIGHT_CONTROL) {
+        if (hostScancode() <= 0 || key.getType() == InputConstants.Type.KEYSYM && key.getValue() == InputConstants.KEY_RCONTROL) {
             return Component.translatable("desktopscreens.key.host");
         }
         return HOST_KEY.getTranslatedKeyMessage();
@@ -232,14 +270,19 @@ public final class DesktopClient {
 
     /**
      * Where the host key is on the keyboard, for {@link com.desktopscreens.core.DesktopInput#setHostKey}: its scan code
-     * as GLFW has it (+0x100 for extended keys). 0 means Right Ctrl: unbound, or a mouse button (the keyboard hook
-     * can't see those).
+     * as Windows (and GLFW) has it (+0x100 for extended keys). 0 means Right Ctrl: unbound, or a mouse button (the
+     * keyboard hook can't see those).
      */
     static int hostScancode() {
         InputConstants.Key key = InputConstants.getKey(HOST_KEY.saveString());
+        //? if >=26.3 {
+        /*// 26.3 already names keys by their place on the keyboard: SDL's scan codes, numbered as USB does.
+        return key.getType() == InputConstants.Type.KEYSYM ? UsbScancodes.toWindows(key.getValue()) : 0;
+        *///?} else {
         if (key.getType() == InputConstants.Type.SCANCODE) return key.getValue();
         if (key.getType() != InputConstants.Type.KEYSYM || key.getValue() == InputConstants.UNKNOWN.getValue()) return 0;
         return Math.max(0, GLFW.glfwGetKeyScancode(key.getValue()));
+        //?}
     }
 
     /** A host key command in a hint that has just named the host key: "[+O]". */

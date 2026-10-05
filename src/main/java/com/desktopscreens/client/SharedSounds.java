@@ -1,6 +1,7 @@
 package com.desktopscreens.client;
 
 import com.desktopscreens.DesktopScreens;
+import com.desktopscreens.Players;
 import com.desktopscreens.ScreenBlockEntity;
 import com.desktopscreens.ShareStream;
 import com.desktopscreens.lib.concentus.OpusDecoder;
@@ -119,7 +120,7 @@ final class SharedSounds {
             if (l == null) {
                 if (e.getValue().distance() > RANGE) continue; // not near enough to start
                 PlayerInfo info = connection.getPlayerInfo(e.getKey());
-                l = new Listening(e.getKey(), info != null ? info.getProfile().getName() : "?");
+                l = new Listening(e.getKey(), info != null ? Players.name(info.getProfile()) : "?");
                 LISTENING.put(e.getKey(), l);
                 startPump();
             }

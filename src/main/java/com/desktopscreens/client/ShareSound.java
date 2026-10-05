@@ -10,7 +10,6 @@ import com.desktopscreens.lib.concentus.OpusEncoder;
 import com.desktopscreens.lib.concentus.OpusException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -208,7 +207,7 @@ final class ShareSound {
             // way the sound doesn't wait for the next frame the game draws.
             if (connection.getConnection().isConnected()) {
                 ShareStream.Label label = new ShareStream.Label(stream, screens);
-                connection.send(new ServerboundCustomPayloadPacket(new ShareStream.SoundUp(label, seq, playedAt, Arrays.copyOf(packet, length))));
+                ClientNet.toServer(connection, new ShareStream.SoundUp(label, seq, playedAt, Arrays.copyOf(packet, length)));
             }
             stats();
         }

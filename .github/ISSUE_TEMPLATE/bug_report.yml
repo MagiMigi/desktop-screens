@@ -34,6 +34,7 @@ body:
       options:
         - NeoForge
         - Fabric
+        - Forge
     validations:
       required: true
 
@@ -42,7 +43,7 @@ body:
     attributes:
       label: Versions
       description: The mod's version, and Minecraft's.
-      placeholder: Desktop Screens 0.1.0, Minecraft 1.21.1
+      placeholder: Desktop Screens 0.2.0, Minecraft 1.21.1
     validations:
       required: true
 

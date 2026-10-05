@@ -3,9 +3,15 @@ package com.desktopscreens;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+//? if >=1.20.5 {
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.desktopscreens.net.ByteBufCodecs;
+import com.desktopscreens.net.StreamCodec;
+import com.desktopscreens.net.CustomPacketPayload;
+*///?}
 import net.minecraft.util.ByIdMap;
 
 /**
@@ -19,11 +25,11 @@ public record ChangeScreen(BlockPos screen, Action action, BlockPos from, BlockP
 
     public static final Type<ChangeScreen> TYPE = new Type<>(DesktopScreens.id("change_screen"));
     public static final StreamCodec<ByteBuf, ChangeScreen> STREAM_CODEC = StreamCodec.composite(
-            BlockPos.STREAM_CODEC, ChangeScreen::screen,
+            Codecs.BLOCK_POS, ChangeScreen::screen,
             ByteBufCodecs.idMapper(ByIdMap.continuous(Action::ordinal, Action.values(), ByIdMap.OutOfBoundsStrategy.ZERO), Action::ordinal), ChangeScreen::action,
-            BlockPos.STREAM_CODEC, ChangeScreen::from,
-            BlockPos.STREAM_CODEC, ChangeScreen::to,
-            Direction.STREAM_CODEC, ChangeScreen::facing,
+            Codecs.BLOCK_POS, ChangeScreen::from,
+            Codecs.BLOCK_POS, ChangeScreen::to,
+            Codecs.DIRECTION, ChangeScreen::facing,
             ChangeScreen::new);
 
     @Override

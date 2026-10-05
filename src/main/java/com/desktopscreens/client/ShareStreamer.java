@@ -12,7 +12,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.util.Mth;
 import org.lwjgl.stb.STBIWriteCallback;
 import org.lwjgl.stb.STBIWriteCallbackI;
@@ -27,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -60,6 +60,8 @@ public final class ShareStreamer {
     private static List<ShareStream.Wanted> wanted = List.of();
     /** One per thing shown on watched screens, by {@link SourceChoice#key}. */
     private static final Map<String, Sender> SENDERS = new LinkedHashMap<>();
+    /** The streams' encoders by stream number, for the server's receipts, which 26.1 reads on the network thread. */
+    private static final Map<Integer, Encoder> ENCODERS = new ConcurrentHashMap<>();
     private static int nextStream;
     private static boolean saidTooMany;
 
@@ -87,11 +89,13 @@ public final class ShareStreamer {
         if (wanted.isEmpty()) stopAll();
     }
 
-    /** The server has a stream's picture; its next may go. Client thread. */
+    /**
+     * The server has a stream's picture; its next may go. Any thread: from 26.1 on, the network thread, so a game that
+     * draws few frames (minimized) still sends at full speed.
+     */
     static void taken(ShareStream.Taken taken) {
-        for (Sender s : SENDERS.values()) {
-            if (s.stream == taken.stream()) s.taken(taken.frame());
-        }
+        Encoder encoder = ENCODERS.get(taken.stream());
+        if (encoder != null) encoder.taken(taken.frame());
     }
 
     /**
@@ -242,14 +246,13 @@ public final class ShareStreamer {
             boolean gained = !this.screens.containsAll(screens);
             this.screens = List.copyOf(screens);
             boolean fresh = encoder == null;
-            if (fresh) encoder = new Encoder(mc, stream);
+            if (fresh) {
+                encoder = new Encoder(mc, stream);
+                ENCODERS.put(stream, encoder);
+            }
             encoder.update(feed, crop, this.screens, what, limits, h264);
             // A screen that joins a running stream: its watchers need a keyframe (a new encoder starts with one).
             if (gained && !fresh) encoder.keyframe();
-        }
-
-        void taken(int frame) {
-            if (encoder != null) encoder.taken(frame);
         }
 
         void keyframe() {
@@ -269,13 +272,14 @@ public final class ShareStreamer {
 
         void stop() {
             if (encoder != null) {
+                ENCODERS.remove(stream, encoder);
                 encoder.stop();
                 encoder = null;
             }
             release();
             // So watchers take its last picture down instead of keeping it up, frozen (2026-09-26).
             ClientPacketListener connection = mc.getConnection();
-            if (connection != null) connection.send(new ServerboundCustomPayloadPacket(new ShareStream.EndUp(stream)));
+            if (connection != null) ClientNet.toServer(connection, new ShareStream.EndUp(stream));
             DesktopScreens.LOG.info("Sharing: stream {} stopped", stream);
         }
     }
@@ -288,15 +292,20 @@ public final class ShareStreamer {
         return new int[] {a[0] - m.x, a[1] - m.y, a[2] - m.x, a[3] - m.y};
     }
 
-    /** Top right, over the HUD and the desktop view: who's watching your screen right now. */
-    static void renderNotice(Minecraft mc, GuiGraphics g, int screenWidth) {
+    /**
+     * Top right, over the HUD and the desktop view: who's watching your screen right now. Returns where it drew,
+     * {left, top, right, bottom} in GUI units, or null.
+     */
+    static int[] renderNotice(Minecraft mc, GuiGraphics g, int screenWidth) {
         List<String> w = watchers;
-        if (w.isEmpty()) return;
+        if (w.isEmpty()) return null;
         Component who = w.size() == 1 ? Component.translatable("desktopscreens.share.watching_one", w.get(0))
                 : w.size() == 2 ? Component.translatable("desktopscreens.share.watching_two", w.get(0), w.get(1))
                 : Component.translatable("desktopscreens.share.watching_many", w.size());
-        Component line = Component.literal("● ").withColor(0xFF5555).append(who.copy().withColor(0xFFFFFF));
-        g.drawString(mc.font, line, screenWidth - mc.font.width(line) - 6, 6, 0xFFFFFF);
+        Component line = Component.literal("● ").withStyle(s -> s.withColor(0xFF5555)).append(who.copy().withStyle(s -> s.withColor(0xFFFFFF)));
+        int x = screenWidth - mc.font.width(line) - 6;
+        GuiDraw.text(g, mc.font, line, x, 6, 0xFFFFFF);
+        return new int[] {x - 2, 4, screenWidth - 4, 6 + mc.font.lineHeight + 2}; // with its shadow and a little room
     }
 
     /** Copies the part to send out of the capture's newest picture, under its lock: just a memory copy. */
@@ -377,6 +386,8 @@ public final class ShareStreamer {
             return w;
         });
         private volatile boolean running = true;
+        /** The game's connection, set by the game's thread; 26.1 sends from the encoder's. */
+        private volatile ClientPacketListener connection;
         private volatile PictureFeed feed;
         private volatile int[] crop;
         /** The screens its pictures are for, and what it sends (for the log). */
@@ -404,6 +415,7 @@ public final class ShareStreamer {
         }
 
         void update(PictureFeed f, int[] crop, List<UUID> screens, String what, ShareStream.Limits limits, boolean h264) {
+            connection = mc.getConnection();
             this.crop = crop;
             this.screens = screens;
             this.what = what;
@@ -422,7 +434,8 @@ public final class ShareStreamer {
             keyframeWanted.set(true);
         }
 
-        void stop() {
+        /** After this returns, it sends nothing more (its stream's end may go out). */
+        synchronized void stop() {
             running = false;
         }
 
@@ -438,8 +451,8 @@ public final class ShareStreamer {
                 while (running) {
                     long now = System.nanoTime();
                     PictureFeed c = feed;
-                    // One picture at a time: the next once the server has the last.
-                    boolean ready = confirmed >= sent || now - sentAt > RECEIPT_TIMEOUT_NANOS;
+                    // A few pictures at a time (ShareStream.IN_FLIGHT): the next once the server has an earlier one.
+                    boolean ready = sent - confirmed < ShareStream.IN_FLIGHT || now - sentAt > RECEIPT_TIMEOUT_NANOS;
                     if (c == null || !ready || now < next) {
                         Thread.sleep(2);
                         continue;
@@ -467,7 +480,9 @@ public final class ShareStreamer {
                         continue;
                     }
                     lastHash = hash;
-                    double scale = Math.min(1.0, Math.min(maxW / (double) cw, maxH / (double) ch));
+                    // At most as many pixels as the server allows (maxW x maxH), whatever the shape: a 1024x768 monitor fits
+                    // 1280x720's and goes out at its own size, where shrinking it to fit 720 rows blurred its text (2026-10-02).
+                    double scale = Math.min(1.0, Math.sqrt((double) maxW * maxH / ((double) cw * ch)));
                     int sw = Math.max(1, (int) Math.round(cw * scale)), sh = Math.max(1, (int) Math.round(ch * scale));
                     byte[] picture = h264Allowed && !h264Failed ? h264Picture(copy, sw, sh, now, key) : null;
                     if (picture == null) { // JPEG: not everyone watching can decode H.264, or it failed here
@@ -565,7 +580,9 @@ public final class ShareStreamer {
                 boolean fresh = false;
                 if (h264 == null || h264.width != ow || h264.height != oh) {
                     closeH264();
-                    int bitrate = Mth.clamp(ow * oh * fps / 7, 500_000, 8_000_000);
+                    // About 0.2 bits a pixel: 4.7 Mbit/s for 1024x768 at 30 a second (0.14 before 2026-10-02 left text and fast
+                    // video smudged).
+                    int bitrate = Mth.clamp(ow * oh * fps / 5, 500_000, 8_000_000);
                     h264 = H264Encoder.open(ow, oh, fps, bitrate);
                     fresh = true;
                     DesktopScreens.LOG.info("Sharing: H.264 at {}x{}, {} kbit/s", ow, oh, bitrate / 1000);
@@ -615,7 +632,7 @@ public final class ShareStreamer {
             }
         }
 
-        /** In pieces the server accepts from a player, labelled with the stream and its screens, sent from the game's thread. */
+        /** In pieces the server accepts from a player, labelled with the stream and its screens. */
         private void sendFrame(int frame, long taken, byte[] picture) {
             int count = (picture.length + ShareStream.CHUNK_BYTES - 1) / ShareStream.CHUNK_BYTES;
             ShareStream.Label label = new ShareStream.Label(stream, screens);
@@ -625,12 +642,22 @@ public final class ShareStreamer {
                 chunks.add(new ShareStream.Chunk(label, frame, i, count, taken, Arrays.copyOfRange(picture, at, Math.min(picture.length, at + ShareStream.CHUNK_BYTES))));
             }
             sent = frame;
+            //? if >=26.1 {
+            /*// From this thread: a minimized 26.1 game draws 10 frames a second, and from the game's thread its pictures
+            // went no faster (2026-10-02). Not once stopped: its end goes out after that, and nothing may follow it.
+            synchronized (this) {
+                ClientPacketListener connection = this.connection;
+                if (connection == null || !running) return;
+                for (ShareStream.Chunk chunk : chunks) ClientNet.toServer(connection, chunk);
+            }
+            *///?} else {
             mc.execute(() -> {
                 ClientPacketListener connection = mc.getConnection();
                 // Stopped meanwhile (on this thread): its end went out already, and nothing may follow it.
                 if (connection == null || !running) return;
-                for (ShareStream.Chunk chunk : chunks) connection.send(new ServerboundCustomPayloadPacket(chunk));
+                for (ShareStream.Chunk chunk : chunks) ClientNet.toServer(connection, chunk);
             });
+            //?}
         }
 
         /** Rows {@code y0} to {@code y1} of the scaled picture: each pixel mixes the four nearest (BGRA, 8.8 fixed point). */

@@ -181,16 +181,17 @@ final class PictureInPicture {
         if (mc.screen instanceof DesktopScreen || !DesktopClient.hasTablet(mc)) return;
         WorldScreens.Picture p = WorldScreens.picture(mc, choice);
         if (p == null || p.cropW() <= 0 || p.cropH() <= 0) return;
+        Awake.now(mc);
         // In window pixels, like the desktop view, so the picture lands on whole pixels.
         Window window = mc.getWindow();
         double scale = window.getGuiScale();
         int[] r = place(p.cropW(), p.cropH(), 0, 0, window.getWidth(), window.getHeight(),
                 (int) Math.round(DesktopConfig.pipGap * scale) + BorderRenderer.thickness());
-        g.flush(); // what was drawn before goes under it, not over it
-        g.pose().pushPose();
-        g.pose().scale((float) (1 / scale), (float) (1 / scale), 1);
+        GuiDraw.flush(g); // what was drawn before goes under it, not over it
+        GuiDraw.push(g);
+        GuiDraw.scale(g, (float) (1 / scale), (float) (1 / scale));
         draw(g, p, r);
-        g.pose().popPose();
+        GuiDraw.pop(g);
     }
 
     /**
@@ -207,9 +208,9 @@ final class PictureInPicture {
         int gx = x + (w - gw) / 2, gy = y + (h - gh) / 2;
         WorldScreens.Picture p = DesktopConfig.pip != null ? WorldScreens.picture(mc, DesktopConfig.pip) : null;
         boolean live = p != null && p.cropW() > 0 && p.cropH() > 0;
-        g.flush();
-        g.pose().pushPose();
-        g.pose().scale((float) (1 / scale), (float) (1 / scale), 1);
+        GuiDraw.flush(g);
+        GuiDraw.push(g);
+        GuiDraw.scale(g, (float) (1 / scale), (float) (1 / scale));
         g.fill(gx - 1, gy - 1, gx + gw + 1, gy + gh + 1, 0xFF5A5A5A); // the game window's outline
         g.fill(gx, gy, gx + gw, gy + gh, 0xFF202830);
         int barW = (int) Math.round(182 * scale * shrink), barH = (int) Math.round(22 * scale * shrink);
@@ -220,7 +221,7 @@ final class PictureInPicture {
         previewPicture = r;
         previewMargin = margin;
         if (live) {
-            g.flush();
+            GuiDraw.flush(g);
             draw(g, p, r);
         } else {
             g.fill(r[0], r[1], r[0] + r[2], r[1] + r[3], 0xFF6A6A6A);
@@ -235,11 +236,11 @@ final class PictureInPicture {
             g.fill(x0, y0 + t, x0 + t, y1 - t, color);
             g.fill(x1 - t, y0 + t, x1, y1 - t, color);
         }
-        g.pose().popPose();
+        GuiDraw.pop(g);
         // Under the small game window, if there's room.
         int textY = (int) ((gy + gh) / scale) + 6;
         if (textY + mc.font.lineHeight <= (y + h) / scale) {
-            g.drawCenteredString(mc.font, Component.translatable("desktopscreens.pip.drag"), (int) ((gx + gw / 2) / scale), textY, 0xB0B0B0);
+            GuiDraw.centeredText(g, mc.font, Component.translatable("desktopscreens.pip.drag"), (int) ((gx + gw / 2) / scale), textY, 0xB0B0B0);
         }
     }
 
@@ -337,7 +338,7 @@ final class PictureInPicture {
 
     /** The picture into {@code r}, with the desktop view's border around it, and the game covered where it shows. */
     private static void draw(GuiGraphics g, WorldScreens.Picture p, int[] r) {
-        DesktopSession.drawPicture(g, p.textureId(), p.frameWidth(), p.frameHeight(), r[0], r[1], r[2], r[3],
+        DesktopSession.drawPicture(g, p.texture(), p.frameWidth(), p.frameHeight(), r[0], r[1], r[2], r[3],
                 p.cropX(), p.cropY(), p.cropW(), p.cropH(), DesktopConfig.scaling != Scaling.SMOOTH);
         int[] cover = GameCover.place(p.game(), p.cropX(), p.cropY(), p.cropW(), p.cropH(), r[0], r[1], r[2], r[3]);
         if (cover != null) GameCover.drawGui(g, cover);

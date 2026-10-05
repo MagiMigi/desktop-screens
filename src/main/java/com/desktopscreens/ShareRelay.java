@@ -1,8 +1,11 @@
 package com.desktopscreens;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.desktopscreens.net.CustomPacketPayload;
+*///?}
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -31,8 +34,9 @@ import java.util.UUID;
  * whole monitor): each listener hears one screen per owner, the nearest they haven't muted, and gets that screen's
  * stream. Each player's game says what it wants of which screen ({@link ShareStream.Watch}).
  *
- * <p>One picture at a time per hop and stream: the owner sends a stream's next picture once the server has the last
- * ({@link ShareStream.Taken}), and each watcher gets the next once theirs arrived ({@link ShareStream.Received}).
+ * <p>A few pictures at a time per hop and stream ({@link ShareStream#IN_FLIGHT}, one before 26.1): the owner sends a
+ * stream's next picture once the server has an earlier one ({@link ShareStream.Taken}), and each watcher gets the next
+ * once one of theirs arrived ({@link ShareStream.Received}).
  * Meanwhile a JPEG watcher only keeps the newest picture waiting. H.264 builds each picture on the ones before, so an
  * H.264 watcher gets them all, in order; one who falls too far behind (or starts watching) skips to the next keyframe,
  * which the owner is asked for. Sound packets are passed on as they come. Server thread only.
@@ -92,13 +96,17 @@ public final class ShareRelay {
         long lastSeen;
     }
 
+    /** A picture sent to a watcher and not yet received. */
+    private record Sent(int frame, long at) {}
+
     /** One stream's pictures on their way to one watcher. */
     private static final class Delivery {
         boolean needsKeyframe = true;
         boolean h264;      // the last picture sent was
         UUID screen;       // one of the watcher's screens it's for, to ask a keyframe for
-        int inFlight = -1; // the picture on its way to them, or -1
-        long sentAt;
+        /** The pictures on their way to them, oldest first, and when each went; at most {@link ShareStream#IN_FLIGHT}. */
+        final ArrayDeque<Sent> inFlight = new ArrayDeque<>();
+        long sentAt; // when the last went
         final ArrayDeque<ShareStream.Frame> waiting = new ArrayDeque<>();
     }
 
@@ -112,14 +120,14 @@ public final class ShareRelay {
             }
             return; // the check on the next tick drops watchers with nothing left, and tells the owners
         }
-        ServerConfig config = ServerConfig.of(watcher.server);
-        ServerLevel level = watcher.serverLevel();
+        ServerConfig config = ServerConfig.of(Players.server(watcher));
+        ServerLevel level = Players.level(watcher);
         BlockPos pos = request.screen();
         if (!config.sharing || !level.isLoaded(pos) || !(level.getBlockEntity(pos) instanceof ScreenBlockEntity screen)) return;
         UUID owner = screen.owner();
-        if (owner == null || owner.equals(me) || !ScreenSharing.mayWatch(watcher.server, screen, me)) return;
+        if (owner == null || owner.equals(me) || !ScreenSharing.mayWatch(Players.server(watcher), screen, me)) return;
         if (watcher.distanceToSqr(Vec3.atCenterOf(pos)) > RANGE * RANGE) return;
-        ServerPlayer ownerPlayer = watcher.server.getPlayerList().getPlayer(owner);
+        ServerPlayer ownerPlayer = Players.server(watcher).getPlayerList().getPlayer(owner);
         if (ownerPlayer == null) return;
         UUID id = ShareStream.idOf(screen.screenId());
         Owner o = OWNERS.computeIfAbsent(owner, k -> new Owner());
@@ -141,7 +149,7 @@ public final class ShareRelay {
     /** A packet of one of the owner's sound streams: on to everyone who hears one of its screens, as it is. */
     public static void sound(ServerPlayer owner, ShareStream.SoundUp packet) {
         Owner o = OWNERS.get(owner.getUUID());
-        if (o == null || !ServerConfig.of(owner.server).shareSound) return;
+        if (o == null || !ServerConfig.of(Players.server(owner)).shareSound) return;
         for (Map.Entry<UUID, Watcher> e : o.watchers.entrySet()) {
             List<UUID> screens = null;
             for (UUID id : packet.label().screens()) {
@@ -151,7 +159,7 @@ public final class ShareRelay {
                 screens.add(id);
             }
             if (screens == null) continue;
-            ServerPlayer player = owner.server.getPlayerList().getPlayer(e.getKey());
+            ServerPlayer player = Players.server(owner).getPlayerList().getPlayer(e.getKey());
             if (player != null) {
                 send(player, new ShareStream.Sound(owner.getUUID(), packet.label().stream(), screens, packet.seq(), packet.played(), packet.opus()));
             }
@@ -168,7 +176,7 @@ public final class ShareRelay {
         if (in == null) {
             // More streams than the owner may send: the one unheard of longest makes room (it loses at most a
             // half-arrived picture), so this never holds more than the limit's worth of pictures.
-            if (o.incoming.size() >= ServerConfig.of(owner.server).shareMaxStreams) {
+            if (o.incoming.size() >= ServerConfig.of(Players.server(owner)).shareMaxStreams) {
                 Iterator<Incoming> oldest = o.incoming.values().iterator();
                 oldest.next();
                 oldest.remove();
@@ -213,7 +221,7 @@ public final class ShareRelay {
         ShareStream.End out = new ShareStream.End(owner.getUUID(), end.stream());
         for (Map.Entry<UUID, Watcher> e : o.watchers.entrySet()) {
             e.getValue().deliveries.remove(end.stream());
-            ServerPlayer player = owner.server.getPlayerList().getPlayer(e.getKey());
+            ServerPlayer player = Players.server(owner).getPlayerList().getPlayer(e.getKey());
             if (player != null) send(player, out);
         }
     }
@@ -249,8 +257,8 @@ public final class ShareRelay {
                 d.needsKeyframe = true; // should H.264 come after JPEG, it starts at a keyframe
             }
             ShareStream.Frame out = new ShareStream.Frame(owner.getUUID(), label.stream(), frame, taken, List.copyOf(screens), picture);
-            if (d.inFlight < 0) {
-                ServerPlayer player = owner.server.getPlayerList().getPlayer(e.getKey());
+            if (d.inFlight.size() < ShareStream.IN_FLIGHT) {
+                ServerPlayer player = Players.server(owner).getPlayerList().getPlayer(e.getKey());
                 if (player != null) sendFrame(player, d, out, now);
             } else if (h264) {
                 d.waiting.add(out);
@@ -276,19 +284,26 @@ public final class ShareRelay {
         send(owner, new ShareStream.Keyframe(screen));
     }
 
-    /** A watcher got a picture: send them that stream's next one waiting, if there is one. */
+    /** A watcher got a picture (and so every one sent before it): send them that stream's next ones waiting, if any. */
     public static void received(ServerPlayer watcher, ShareStream.Received receipt) {
         Owner o = OWNERS.get(receipt.owner());
         Watcher w = o == null ? null : o.watchers.get(watcher.getUUID());
         Delivery d = w == null ? null : w.deliveries.get(receipt.stream());
-        if (d == null || d.inFlight != receipt.frame()) return; // (a late receipt for one taken as lost)
-        d.inFlight = -1;
-        ShareStream.Frame next = d.waiting.poll();
-        if (next != null) sendFrame(watcher, d, next, System.currentTimeMillis());
+        if (d == null || d.inFlight.stream().noneMatch(s -> s.frame() == receipt.frame())) return; // (a late receipt for one taken as lost)
+        while (d.inFlight.poll().frame() != receipt.frame()) {
+            // they arrive in order, so the ones before it are there too
+        }
+        sendWaiting(watcher, d, System.currentTimeMillis());
+    }
+
+    /** As many of a stream's waiting pictures as may be on their way. */
+    private static void sendWaiting(ServerPlayer player, Delivery d, long now) {
+        ShareStream.Frame next;
+        while (d.inFlight.size() < ShareStream.IN_FLIGHT && (next = d.waiting.poll()) != null) sendFrame(player, d, next, now);
     }
 
     private static void sendFrame(ServerPlayer player, Delivery d, ShareStream.Frame frame, long now) {
-        d.inFlight = frame.frame();
+        d.inFlight.add(new Sent(frame.frame(), now));
         d.h264 = ShareStream.isH264(frame.picture());
         d.sentAt = now;
         send(player, frame);
@@ -329,15 +344,14 @@ public final class ShareRelay {
                 }
                 // A stream that stopped (its screens show something else now) or stands still: forgotten after a
                 // while; should it send again, the watcher starts at a keyframe.
-                w.deliveries.values().removeIf(d -> d.inFlight < 0 && d.waiting.isEmpty() && now - d.sentAt > IDLE_DELIVERY_MILLIS);
+                w.deliveries.values().removeIf(d -> d.inFlight.isEmpty() && d.waiting.isEmpty() && now - d.sentAt > IDLE_DELIVERY_MILLIS);
                 for (Delivery d : w.deliveries.values()) {
-                    if (d.inFlight < 0 || now - d.sentAt <= RECEIPT_TIMEOUT_MILLIS) continue;
-                    d.inFlight = -1; // lost
+                    if (d.inFlight.isEmpty() || now - d.inFlight.peek().at() <= RECEIPT_TIMEOUT_MILLIS) continue;
+                    d.inFlight.clear(); // lost
                     if (d.h264) {
                         fellBehind(ownerPlayer, o, d, now);
                     } else {
-                        ShareStream.Frame next = d.waiting.poll();
-                        if (next != null) sendFrame(player, d, next, now);
+                        sendWaiting(player, d, now);
                     }
                 }
             }
@@ -348,10 +362,10 @@ public final class ShareRelay {
 
     private static boolean stillWatching(ServerPlayer player, Interest i, UUID owner, UUID id) {
         if (player.level().dimension() != i.dimension || player.distanceToSqr(Vec3.atCenterOf(i.pos)) > RANGE * RANGE) return false;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = Players.level(player);
         return level.isLoaded(i.pos) && level.getBlockEntity(i.pos) instanceof ScreenBlockEntity screen
                 && owner.equals(screen.owner()) && id.equals(ShareStream.idOf(screen.screenId()))
-                && ScreenSharing.mayWatch(player.server, screen, player.getUUID());
+                && ScreenSharing.mayWatch(Players.server(player), screen, player.getUUID());
     }
 
     /**
@@ -363,8 +377,8 @@ public final class ShareRelay {
         Map<UUID, Boolean> screens = new LinkedHashMap<>();
         Set<UUID> sound = new LinkedHashSet<>();
         for (Map.Entry<UUID, Watcher> e : o.watchers.entrySet()) {
-            ServerPlayer p = owner.server.getPlayerList().getPlayer(e.getKey());
-            if (p != null) names.add(p.getGameProfile().getName());
+            ServerPlayer p = Players.server(owner).getPlayerList().getPlayer(e.getKey());
+            if (p != null) names.add(Players.name(p));
             Watcher w = e.getValue();
             for (Map.Entry<UUID, Interest> s : w.screens.entrySet()) {
                 if (s.getValue().pictures && (screens.containsKey(s.getKey()) || screens.size() < ShareStream.MAX_SCREENS)) {
@@ -386,6 +400,6 @@ public final class ShareRelay {
     }
 
     private static void send(ServerPlayer player, CustomPacketPayload payload) {
-        player.connection.send(new ClientboundCustomPayloadPacket(payload));
+        Net.toPlayer(player, payload);
     }
 }

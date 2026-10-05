@@ -23,10 +23,16 @@ tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
 }
 
-// src/ holds every loader's code; the other loaders' packages and files stay out of this jar.
+// src/ holds every loader's code; the other loaders' packages and files stay out of this jar. The recipes, loot
+// tables and tags come from the folders in src/data listed for this version (mod.data), in its format.
 sourceSets.main {
-    java.exclude("com/desktopscreens/fabric/**")
-    resources.exclude("fabric.mod.json", "desktopscreens.fabric.mixins.json")
+    java.exclude("com/desktopscreens/fabric/**", "com/desktopscreens/forge/**")
+    resources.exclude("fabric.mod.json", "desktopscreens.fabric.mixins.json", "META-INF/mods.toml")
+    for (folder in prop("mod.data").split(" ")) resources.srcDir(rootProject.file("src/data/$folder"))
+    // Stand-ins for networking classes Minecraft has only from 1.20.5 on (see net/CustomPacketPayload).
+    if (sc.current.parsed >= "1.20.5") java.exclude("com/desktopscreens/net/**")
+    // 26.1 draws the GUI picture with its own shader (in src/data/26.1) and needs no pack.mcmeta.
+    if (sc.current.parsed >= "26.1") resources.exclude("assets/desktopscreens/shaders/core/desktop.*", "pack.mcmeta")
 }
 
 // core's sources (and the Concentus copy it prepares) are compiled straight into this jar.
@@ -55,6 +61,7 @@ tasks.compileJava {
 // A land-claim mod in our own test game, to check that the Screen Builder asks it (see LandClaims):
 //   gradlew :1.21.1-neoforge:runClient -Pclaims=ftb    FTB Chunks (what All the Mods uses), with FTB Teams and Architectury
 //   gradlew :1.21.1-neoforge:runClient -Pclaims=opac   Open Parties and Claims
+//   gradlew :26.3-neoforge:runClient -Pclaims=flan     Flan, where a version lists one (deps.flan)
 // Only then, and never in the mod's jar.
 val claims = findProperty("claims") as String?
 if (claims != null) {
@@ -76,16 +83,18 @@ if (claims != null) {
         when (claims) {
             "ftb" -> runtimeOnly("dev.ftb.mods:ftb-chunks-neoforge:${prop("deps.ftb_chunks")}")
             "opac" -> runtimeOnly("maven.modrinth:open-parties-and-claims:${prop("deps.opac")}")
-            // Tried on Fabric only, for the Common Protection API; on NeoForge Flan answers the same events as the others.
-            "flan" -> {}
-            else -> throw GradleException("-Pclaims=ftb or -Pclaims=opac, not '$claims'")
+            // Flan answers the same NeoForge events as the others. Only where OPAC can't be tried: its 26.3 build needs a
+            // config type NeoForge 26.3 dropped in a later beta (SERVER), and stops the game at startup (2026-10-02).
+            "flan" -> runCatching { prop("deps.flan") }.getOrNull()?.let { runtimeOnly("maven.modrinth:flan:$it") }
+            else -> throw GradleException("-Pclaims=ftb, -Pclaims=opac or -Pclaims=flan, not '$claims'")
         }
     }
 }
 
 neoForge {
     version = prop("deps.neoforge")
-    parchment {
+    // Parchment's parameter names, for versions up to 1.21.11; 26.1 on comes with Mojang's own.
+    if (sc.current.parsed < "26.1") parchment {
         minecraftVersion = prop("deps.parchment_minecraft")
         mappingsVersion = prop("deps.parchment")
     }
@@ -120,9 +129,11 @@ tasks.processResources {
         "minecraft_version_range" to prop("mod.minecraft_range"),
         "neoforge_version_range" to prop("deps.neoforge_range"),
         "neoforge_loader_version_range" to prop("deps.neoforge_loader_range"),
+        "pack_format" to prop("mod.pack_format"),
+        "java_version" to javaVersion,
     )
     inputs.properties(expandProps)
-    filesMatching(listOf("pack.mcmeta", "META-INF/neoforge.mods.toml")) {
+    filesMatching(listOf("pack.mcmeta", "META-INF/neoforge.mods.toml", "*.mixins.json")) {
         expand(expandProps)
     }
 }

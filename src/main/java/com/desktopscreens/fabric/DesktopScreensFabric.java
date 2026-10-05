@@ -5,6 +5,7 @@ import com.desktopscreens.ChangeScreen;
 import com.desktopscreens.BuilderRules;
 import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.LandClaims;
+import com.desktopscreens.Net;
 import com.desktopscreens.OwnedScreens;
 import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBlockEntity;
@@ -19,7 +20,11 @@ import com.desktopscreens.TabletItem;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
+//? if >=1.20.5 {
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+//?} else {
+/*import com.desktopscreens.net.Payloads;
+*///?}
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.Registry;
@@ -28,6 +33,12 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+//? if >=1.21.2 {
+/*import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.block.Block;
+*///?}
 
 /** Runs on both sides: game content only. Client-only setup is in {@link DesktopScreensFabricClient}. */
 public final class DesktopScreensFabric implements ModInitializer {
@@ -40,6 +51,18 @@ public final class DesktopScreensFabric implements ModInitializer {
     @Override
     public void onInitialize() {
         // Items in the same order as on NeoForge, so their numbers match when a client of one joins a server of the other.
+        //? if >=1.21.2 {
+        /*// From 1.21.2 on, an item's or block's properties carry its id, given before it's made.
+        tablet = Registry.register(BuiltInRegistries.ITEM, itemKey(TabletItem.NAME), new TabletItem(TabletItem.properties().setId(itemKey(TabletItem.NAME))));
+        ResourceKey<Block> screenKey = ResourceKey.create(Registries.BLOCK, DesktopScreens.id(ScreenBlock.NAME));
+        screen = Registry.register(BuiltInRegistries.BLOCK, screenKey, new ScreenBlock(ScreenBlock.defaultProperties().setId(screenKey)));
+        screenItem = Registry.register(BuiltInRegistries.ITEM, itemKey(ScreenBlock.NAME),
+                new BlockItem(screen, new Item.Properties().setId(itemKey(ScreenBlock.NAME)).useBlockDescriptionPrefix()));
+        screenBuilder = Registry.register(BuiltInRegistries.ITEM, itemKey(ScreenBuilderItem.NAME),
+                new ScreenBuilderItem(ScreenBuilderItem.properties().setId(itemKey(ScreenBuilderItem.NAME))));
+        screenEntity = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, DesktopScreens.id(ScreenBlock.NAME),
+                FabricBlockEntityTypeBuilder.create(ScreenBlockEntity::new, screen).build());
+        *///?} else {
         tablet = Registry.register(BuiltInRegistries.ITEM, DesktopScreens.id(TabletItem.NAME), new TabletItem(TabletItem.properties()));
         screen = Registry.register(BuiltInRegistries.BLOCK, DesktopScreens.id(ScreenBlock.NAME), new ScreenBlock(ScreenBlock.defaultProperties()));
         screenItem = Registry.register(BuiltInRegistries.ITEM, DesktopScreens.id(ScreenBlock.NAME), new BlockItem(screen, new Item.Properties()));
@@ -47,6 +70,7 @@ public final class DesktopScreensFabric implements ModInitializer {
                 new ScreenBuilderItem(ScreenBuilderItem.properties()));
         screenEntity = Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, DesktopScreens.id(ScreenBlock.NAME),
                 BlockEntityType.Builder.of(ScreenBlockEntity::new, screen).build(null));
+        //?}
         ScreenBlockEntity.type = () -> screenEntity;
 
         ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(entries -> {
@@ -58,6 +82,7 @@ public final class DesktopScreensFabric implements ModInitializer {
             if (ServerCheck.serverHasMod.getAsBoolean()) entries.accept(screenItem);
         });
 
+        //? if >=1.20.5 {
         PayloadTypeRegistry.playC2S().register(ServerCheck.TYPE, ServerCheck.STREAM_CODEC);
         ServerPlayNetworking.registerGlobalReceiver(ServerCheck.TYPE, (payload, context) -> {});
         PayloadTypeRegistry.playC2S().register(BuildScreen.TYPE, BuildScreen.STREAM_CODEC);
@@ -83,15 +108,29 @@ public final class DesktopScreensFabric implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(ShareStream.Keyframe.TYPE, ShareStream.Keyframe.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(ShareStream.Sound.TYPE, ShareStream.Sound.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(ShareStream.End.TYPE, ShareStream.End.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(BuilderRules.TYPE, BuilderRules.STREAM_CODEC);
         ScreenSharing.canReceive = ServerPlayNetworking::canSend;
+        //?} else {
+        /*// Fabric API reads these on the network thread; they're handled on the server's.
+        for (Payloads.ToServer<?> message : Payloads.TO_SERVER) {
+            ServerPlayNetworking.registerGlobalReceiver(message.type().id(),
+                    (server, player, handler, buf, sender) -> server.execute(message.read(player, buf)));
+        }
+        ScreenSharing.canReceive = (player, type) -> ServerPlayNetworking.canSend(player, type.id());
+        *///?}
         LandClaims.ask = new LandClaimsFabric();
         ServerTickEvents.END_SERVER_TICK.register(DesktopScreens::serverTick);
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> OwnedScreens.left(handler.player));
-        PayloadTypeRegistry.playS2C().register(BuilderRules.TYPE, BuilderRules.STREAM_CODEC);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             OwnedScreens.joined(handler.player);
-            if (ServerPlayNetworking.canSend(handler, BuilderRules.TYPE)) sender.sendPacket(BuilderRules.of(server));
+            if (ScreenSharing.canReceive.test(handler.player, BuilderRules.TYPE)) Net.toPlayer(handler.player, BuilderRules.of(server));
             ScreenSharing.sendLists(handler.player);
         });
     }
+
+    //? if >=1.21.2 {
+    /*private static ResourceKey<Item> itemKey(String name) {
+        return ResourceKey.create(Registries.ITEM, DesktopScreens.id(name));
+    }
+    *///?}
 }

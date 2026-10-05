@@ -1,9 +1,15 @@
 package com.desktopscreens;
 
 import io.netty.buffer.ByteBuf;
+//? if >=1.20.5 {
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.desktopscreens.net.ByteBufCodecs;
+import com.desktopscreens.net.StreamCodec;
+import com.desktopscreens.net.CustomPacketPayload;
+*///?}
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.Mth;
 

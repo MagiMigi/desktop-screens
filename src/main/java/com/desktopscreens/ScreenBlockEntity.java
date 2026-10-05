@@ -2,6 +2,11 @@ package com.desktopscreens;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+//? if >=1.21.6 {
+/*import net.minecraft.core.UUIDUtil;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+*///?}
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -98,7 +103,7 @@ public final class ScreenBlockEntity extends BlockEntity {
     /** Server side: on for {@code player}, or off with null. Either way, sharing ends. Sends the change to the clients. */
     void setOwner(Player player) {
         owner = player == null ? null : player.getUUID();
-        ownerName = player == null ? "" : player.getGameProfile().getName();
+        ownerName = player == null ? "" : Players.name(player);
         shared = List.of();
         if (level != null) OwnedScreens.track(level, worldPosition, owner);
         sendChange();
@@ -125,9 +130,48 @@ public final class ScreenBlockEntity extends BlockEntity {
         if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
     }
 
+    //? if >=1.21.6 {
+    /*// Saved the way 1.21.1 did (UUIDs as four ints), so worlds carry over.
     @Override
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        owner = input.read("owner", UUIDUtil.CODEC).orElse(null);
+        ownerName = input.getStringOr("owner_name", "");
+        List<Watcher> watchers = new ArrayList<>();
+        for (ValueInput w : input.childrenListOrEmpty("shared")) {
+            w.read("id", UUIDUtil.CODEC).ifPresent(id -> watchers.add(new Watcher(id, w.getStringOr("name", ""))));
+        }
+        shared = List.copyOf(watchers);
+        screenId = input.read("screen_id", UUIDUtil.CODEC).orElse(null);
+        changed();
+    }
+
+    @Override
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
+        output.storeNullable("screen_id", UUIDUtil.CODEC, screenId);
+        if (owner != null) {
+            output.store("owner", UUIDUtil.CODEC, owner);
+            output.putString("owner_name", ownerName);
+            if (!shared.isEmpty()) {
+                ValueOutput.ValueOutputList list = output.childrenList("shared");
+                for (Watcher w : shared) {
+                    ValueOutput entry = list.addChild();
+                    entry.store("id", UUIDUtil.CODEC, w.id());
+                    entry.putString("name", w.name());
+                }
+            }
+        }
+    }
+    *///?} else {
+    @Override
+    //? if >=1.20.5 {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
+    //?} else {
+    /*public void load(CompoundTag tag) {
+        super.load(tag);
+    *///?}
         owner = tag.hasUUID("owner") ? tag.getUUID("owner") : null;
         ownerName = tag.getString("owner_name");
         List<Watcher> watchers = new ArrayList<>();
@@ -141,8 +185,13 @@ public final class ScreenBlockEntity extends BlockEntity {
     }
 
     @Override
+    //? if >=1.20.5 {
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
+    //?} else {
+    /*protected void saveAdditional(CompoundTag tag) {
+        super.saveAdditional(tag);
+    *///?}
         if (screenId != null) tag.putUUID("screen_id", screenId);
         if (owner != null) {
             tag.putUUID("owner", owner);
@@ -159,11 +208,17 @@ public final class ScreenBlockEntity extends BlockEntity {
             }
         }
     }
+    //?}
 
     /** The owner goes to the clients with the chunk and with every change. */
     @Override
+    //? if >=1.20.5 {
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = saveCustomOnly(registries);
+    //?} else {
+    /*public CompoundTag getUpdateTag() {
+        CompoundTag tag = saveWithoutMetadata();
+    *///?}
         // An off screen saves nothing, and the client ignores an empty update, so it would stay on there.
         tag.putBoolean("on", owner != null);
         return tag;

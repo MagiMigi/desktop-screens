@@ -5,16 +5,31 @@ import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
 import com.desktopscreens.core.Win32;
 import net.minecraft.client.Minecraft;
+//? if <26.3 {
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWNativeWin32;
+//?}
 
+//? if >=26.3 {
+/*/^*
+ * Nothing to do from 26.3 on: Minecraft no longer minimizes itself when another window gets the focus, and its F11 is
+ * a borderless window, which a window clicked on its own monitor simply comes in front of.
+ ^/
+final class FullscreenFocus {
+    private FullscreenFocus() {}
+
+    static void tick(Minecraft mc) {}
+}
+*///?} else {
 /**
  * Fullscreen Minecraft minimizes itself whenever another window gets the focus, even one on another monitor: chatting
  * in Discord on the second monitor, the game vanished from the first, and from a stream of it (2026-09-28).
  * Now it only does so for a window on its own monitor, which would otherwise stay hidden behind it; for one only on
  * another monitor it stays on screen, as a windowed game would. GLFW's own minimizing (GLFW_AUTO_ICONIFY) is off, and
  * this does it instead, every tick. Not while a desktop view is open: {@link FocusHandOff} keeps the game up then,
- * whatever gets the focus. Off with {@link DesktopConfig#fullscreenStays}.
+ * whatever gets the focus. Off with {@link DesktopConfig#fullscreenStays}. Alt+Tab first gives the focus to Windows'
+ * own switcher, on the main monitor; that changes nothing ({@link Win32.Front#PICKING}), the window picked decides
+ * (2026-10-03: Alt+Tab to a window on monitor 2 minimized the game before).
  */
 final class FullscreenFocus {
     /** What was in front last tick while the game didn't have the focus, so each change is acted on (and logged) once. */
@@ -69,3 +84,4 @@ final class FullscreenFocus {
         }
     }
 }
+//?}

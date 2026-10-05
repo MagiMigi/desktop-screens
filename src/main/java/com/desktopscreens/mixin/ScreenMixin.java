@@ -15,6 +15,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(Screen.class)
 abstract class ScreenMixin {
+    //? if >=26.1 {
+    /*@Inject(method = "extractTransparentBackground", at = @At("TAIL"))
+    private void desktopscreens$afterTransparentBackground(GuiGraphics g, CallbackInfo ci) {
+        DesktopClient.renderBehindMenu((Screen) (Object) this, g);
+    }
+
+    @Inject(method = "extractMenuBackground(Lnet/minecraft/client/gui/GuiGraphics;)V", at = @At("TAIL"))
+    private void desktopscreens$afterMenuBackground(GuiGraphics g, CallbackInfo ci) {
+        DesktopClient.renderBehindMenu((Screen) (Object) this, g);
+    }
+    *///?} else if >=1.20.5 {
     @Inject(method = "renderTransparentBackground", at = @At("TAIL"))
     private void desktopscreens$afterTransparentBackground(GuiGraphics g, CallbackInfo ci) {
         DesktopClient.renderBehindMenu((Screen) (Object) this, g);
@@ -24,4 +35,11 @@ abstract class ScreenMixin {
     private void desktopscreens$afterMenuBackground(GuiGraphics g, CallbackInfo ci) {
         DesktopClient.renderBehindMenu((Screen) (Object) this, g);
     }
+    //?} else {
+    /*// Before 1.20.5 every menu, containers too, darkens the world through this one (or draws dirt, outside a world).
+    @Inject(method = "renderBackground(Lnet/minecraft/client/gui/GuiGraphics;)V", at = @At("TAIL"))
+    private void desktopscreens$afterBackground(GuiGraphics g, CallbackInfo ci) {
+        DesktopClient.renderBehindMenu((Screen) (Object) this, g);
+    }
+    *///?}
 }

@@ -49,7 +49,11 @@ public final class OwnedScreens {
     public static void left(ServerPlayer player) {
         // Shutting down: they stay on. The host of a singleplayer (or LAN) world leaves just before its server stops,
         // while it still counts as running, which turned their screens off on every quit (2026-09-26).
-        if (!player.server.isRunning() || player.server.isSingleplayerOwner(player.getGameProfile())) return;
+        //? if >=1.21.9 {
+        /*if (!Players.server(player).isRunning() || Players.server(player).isSingleplayerOwner(player.nameAndId())) return;
+        *///?} else {
+        if (!Players.server(player).isRunning() || Players.server(player).isSingleplayerOwner(player.getGameProfile())) return;
+        //?}
         LEFT.add(player.getUUID());
     }
 

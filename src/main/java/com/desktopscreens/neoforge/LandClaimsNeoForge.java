@@ -10,7 +10,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.util.BlockSnapshot;
 import net.neoforged.neoforge.event.EventHooks;
+//? if >=26.1 {
+/*import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
+*///?} else {
 import net.neoforged.neoforge.event.level.BlockEvent;
+//?}
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +26,11 @@ import java.util.List;
 final class LandClaimsNeoForge implements LandClaims.Ask {
     @Override
     public boolean mayBreak(ServerLevel level, BlockPos pos, BlockState state, ServerPlayer player) {
+        //? if >=26.1 {
+        /*return !NeoForge.EVENT_BUS.post(new BreakBlockEvent(level, pos, state, player)).isCanceled();
+        *///?} else {
         return !NeoForge.EVENT_BUS.post(new BlockEvent.BreakEvent(level, pos, state, player)).isCanceled();
+        //?}
     }
 
     /**

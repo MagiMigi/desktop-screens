@@ -50,10 +50,21 @@ final class SharedSound extends AbstractTickableSoundInstance {
     }
 
     @Override
+    //? if >=26.3 {
+    /*public WeighedSoundEvents getOrResolve(SoundManager manager) {
+    *///?} else {
     public WeighedSoundEvents resolve(SoundManager manager) {
+    //?}
+        //? if >=1.20.5 {
         sound = new Sound(ID, ConstantFloat.of(1), ConstantFloat.of(1), 1, Sound.Type.FILE, true, false, 16);
+        //?} else {
+        /*sound = new Sound(ID.toString(), ConstantFloat.of(1), ConstantFloat.of(1), 1, Sound.Type.FILE, true, false, 16);
+        *///?}
         WeighedSoundEvents events = new WeighedSoundEvents(ID, "desktopscreens.subtitle.shared_screen");
         events.addSound(sound);
+        //? if >=26.3 {
+        /*soundEvent = events; // the sound engine asks for it again later (getSoundEvent)
+        *///?}
         return events;
     }
 

@@ -1,4 +1,5 @@
-* text=auto
+# LF in every checkout, also on Windows, so the jars come out the same on every machine.
+* text=auto eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf
 gradlew text eol=lf

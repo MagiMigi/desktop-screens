@@ -5,6 +5,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+//? if >=1.21.5 {
+/*import net.minecraft.world.item.component.TooltipDisplay;
+import java.util.function.Consumer;
+*///?}
 
 import java.util.List;
 
@@ -27,9 +31,23 @@ public final class ScreenBuilderItem extends Item {
     }
 
     @Override
+    //? if >=1.21.5 {
+    /*public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> lines, TooltipFlag flag) {
+        tooltip().forEach(lines);
+    }
+    *///?} else if >=1.20.5 {
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
-        lines.add(Component.translatable("item.desktopscreens.screen_builder.tooltip").withStyle(ChatFormatting.GRAY));
-        lines.add(Component.translatable("item.desktopscreens.screen_builder.tooltip_more").withStyle(ChatFormatting.DARK_GRAY));
-        lines.add(Component.translatable("item.desktopscreens.screen_builder.tooltip_change").withStyle(ChatFormatting.DARK_GRAY));
+        lines.addAll(tooltip());
+    }
+    //?} else {
+    /*public void appendHoverText(ItemStack stack, net.minecraft.world.level.Level level, List<Component> lines, TooltipFlag flag) {
+        lines.addAll(tooltip());
+    }
+    *///?}
+
+    private static List<Component> tooltip() {
+        return List.of(Component.translatable("item.desktopscreens.screen_builder.tooltip").withStyle(ChatFormatting.GRAY),
+                Component.translatable("item.desktopscreens.screen_builder.tooltip_more").withStyle(ChatFormatting.DARK_GRAY),
+                Component.translatable("item.desktopscreens.screen_builder.tooltip_change").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

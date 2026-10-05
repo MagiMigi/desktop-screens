@@ -1,13 +1,13 @@
 package com.desktopscreens.client;
 
 import com.desktopscreens.DesktopScreens;
+import com.desktopscreens.Players;
 import com.desktopscreens.ShareStream;
 import com.desktopscreens.core.H264Decoder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;
@@ -16,6 +16,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -47,6 +48,12 @@ final class SharedPictures {
     private static final int MAX_WAITING = 12;
     /** A picture never waits longer than this, whatever the sound's delay seems to be. */
     private static final long MAX_HOLD_NANOS = 500_000_000L;
+    /**
+     * Pictures are paced by how long the slowest of the last {@link #PACE_SAMPLES} took to arrive (the {@link
+     * #PACE_RANK}th slowest, so one odd one doesn't count), plus {@link #PACE_MARGIN_NANOS}.
+     */
+    private static final int PACE_SAMPLES = 60, PACE_RANK = 3;
+    private static final long PACE_MARGIN_NANOS = 5_000_000L;
 
     /** One of an owner's streams. */
     private record StreamKey(UUID owner, int stream) {}
@@ -88,6 +95,14 @@ final class SharedPictures {
         H264Decoder h264;
         boolean h264Broken;
         long h264Time;
+        /** How long the last pictures took from the owner's screen to decoded here, oldest overwritten first. */
+        final long[] latencies = new long[PACE_SAMPLES];
+        int latencyCount, latencyNext;
+        /**
+         * How long after it was taken a picture shows, at least (both in the same mix of the two PCs' clocks as
+         * {@link ShareTiming#soundDelay}), or {@link Long#MIN_VALUE} before the first. Set by the decoder thread.
+         */
+        volatile long paceDelay = Long.MIN_VALUE;
         long lastWanted;
         /** When the owner ended it ({@link ShareStream.End}), or 0. Client thread. */
         long endedAt;
@@ -115,7 +130,7 @@ final class SharedPictures {
             if (before != null && before.width > 0) s = before;
         }
         if (s == null || s.width == 0) return null;
-        return new WorldScreens.Picture(s.renderType, s.texture.getId(), s.width, s.height, 0, 0, s.width, s.height, null);
+        return new WorldScreens.Picture(s.renderType, s.texture, s.width, s.height, 0, 0, s.width, s.height, null);
     }
 
     /** Marks {@code s} as wanted and puts up its newest picture that's due. */
@@ -135,17 +150,21 @@ final class SharedPictures {
     }
 
     /**
-     * The newest decoded picture that's due now (older ones are freed), or null. While the owner's sound is heard,
-     * {@code soundDelay} says how late (watcher's clock minus owner's), and a picture is due once the sound from when
-     * it was taken is heard: the sound comes about 100 ms later than the picture otherwise (measured 2026-09-25), and
-     * lips out of step are easy to notice. Without sound ({@link ShareTiming#NO_SOUND}) the newest is due right away;
-     * the two PCs' clocks aren't compared then, since they differ.
+     * The newest decoded picture that's due now (older ones are freed), or null. A picture is due once its time on the
+     * owner's screen plus a fixed delay has come, so pictures show as evenly as they were taken, however unevenly they
+     * arrive: 26.1's server passes them on once per tick, two at once and then none for 50 ms, and shown as they came
+     * that looked jerky at a full 28 a second (2026-10-02). The delay is how long nearly all recent pictures took to
+     * get here ({@link #pace}); while the owner's sound is heard and comes later, it's the sound's ({@code soundDelay},
+     * watcher's clock minus owner's): the sound comes about 100 ms later than the picture otherwise (measured
+     * 2026-09-25), and lips out of step are easy to notice. The two PCs' clocks differ, but both delays are measured
+     * against the same pair, so the difference drops out.
      */
     private static Decoded due(Shared s, long soundDelay) {
         long now = System.nanoTime();
+        long delay = soundDelay == ShareTiming.NO_SOUND ? s.paceDelay : Math.max(soundDelay, s.paceDelay);
         Decoded pick = null;
         for (Decoded d; (d = s.decoded.pollFirst()) != null; ) {
-            boolean isDue = soundDelay == ShareTiming.NO_SOUND || d.taken() + soundDelay <= now || now - d.ready() > MAX_HOLD_NANOS;
+            boolean isDue = delay == Long.MIN_VALUE || d.taken() + delay <= now || now - d.ready() > MAX_HOLD_NANOS;
             if (!isDue) {
                 s.decoded.offerFirst(d);
                 break;
@@ -154,6 +173,19 @@ final class SharedPictures {
             pick = d;
         }
         return pick;
+    }
+
+    /**
+     * A picture took {@code latency} from the owner's screen to decoded here (with the clocks' difference in it): the
+     * pace delay becomes the {@link #PACE_RANK}th longest of the recent ones plus a margin. Decoder thread.
+     */
+    private static void pace(Shared s, long latency) {
+        s.latencies[s.latencyNext] = latency;
+        s.latencyNext = (s.latencyNext + 1) % PACE_SAMPLES;
+        s.latencyCount = Math.min(PACE_SAMPLES, s.latencyCount + 1);
+        long[] recent = Arrays.copyOf(s.latencies, s.latencyCount);
+        Arrays.sort(recent);
+        s.paceDelay = recent[Math.max(0, recent.length - PACE_RANK)] + PACE_MARGIN_NANOS;
     }
 
     /** Every client tick: forgets the pictures of streams no screen in sight showed for a while. */
@@ -187,7 +219,7 @@ final class SharedPictures {
         Minecraft mc = Minecraft.getInstance();
         ClientPacketListener connection = mc.getConnection();
         if (connection == null) return;
-        connection.send(new ServerboundCustomPayloadPacket(new ShareStream.Received(frame.owner(), frame.stream(), frame.frame())));
+        ClientNet.toServer(connection, new ShareStream.Received(frame.owner(), frame.stream(), frame.frame()));
         List<ShareWatching.Screen> screens = new ArrayList<>();
         for (UUID id : frame.screens()) {
             ShareWatching.Screen screen = new ShareWatching.Screen(frame.owner(), id);
@@ -207,7 +239,7 @@ final class SharedPictures {
             shown.previous = shown.current;
             shown.current = key;
             PlayerInfo info = connection.getPlayerInfo(frame.owner());
-            DesktopScreens.LOG.info("Sharing: a screen of {}'s shows their stream {}{}", info != null ? info.getProfile().getName() : "?",
+            DesktopScreens.LOG.info("Sharing: a screen of {}'s shows their stream {}{}", info != null ? Players.name(info.getProfile()) : "?",
                     frame.stream(), shown.previous != null ? " (was " + shown.previous.stream() + ")" : "");
         }
         s.pictures.add(frame);
@@ -292,6 +324,7 @@ final class SharedPictures {
                     if (d != null) {
                         s.decoded.offerLast(d);
                         while (s.decoded.size() > MAX_WAITING) free(s.decoded.pollFirst());
+                        pace(s, d.ready() - d.taken());
                     }
                 } catch (RuntimeException | LinkageError e) {
                     if (h264) {

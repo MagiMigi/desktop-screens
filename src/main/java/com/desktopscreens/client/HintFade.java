@@ -34,7 +34,7 @@ final class HintFade {
         long age = now - since;
         int alpha = age < SHOW_MILLIS ? 255 : (int) Math.max(0, 255 - (age - SHOW_MILLIS) * 255 / FADE_MILLIS);
         if (alpha < 4) return false; // Minecraft's font draws alpha below 4 fully opaque
-        for (int i = 0; i < lines.size(); i++) g.drawCenteredString(font, lines.get(i), x, y + i * 12, alpha << 24 | rgb);
+        for (int i = 0; i < lines.size(); i++) GuiDraw.centeredText(g, font, lines.get(i), x, y + i * 12, alpha << 24 | rgb);
         return true;
     }
 }

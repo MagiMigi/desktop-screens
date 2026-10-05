@@ -31,7 +31,7 @@ public final class ServerConfig {
                     "Whether players may share their screens with other players. The pictures go through this server."),
             new Setting("sharing.maxFps", "30", "How many pictures per second a shared screen may send at most (1 to 60)."),
             new Setting("sharing.maxWidth", "1280",
-                    "The biggest shared picture, in pixels; bigger ones are scaled down (320x180 to 1920x1080)."),
+                    "The biggest shared picture, in pixels (320x180 to 1920x1080): bigger ones are scaled down to as many pixels, keeping their shape."),
             new Setting("sharing.maxHeight", "720", null),
             new Setting("sharing.maxStreams", "4",
                     "How many different pictures one player may share at once (1 to 8): screens showing different things each send their own."),
@@ -62,7 +62,11 @@ public final class ServerConfig {
     public static synchronized ServerConfig of(MinecraftServer server) {
         if (loadedFor.get() != server || loaded == null) {
             loadedFor = new WeakReference<>(server);
+            //? if >=1.20.5 {
             loaded = load(server.getServerDirectory().resolve("config").resolve(DesktopScreens.MOD_ID + "-server.properties"));
+            //?} else {
+            /*loaded = load(server.getServerDirectory().toPath().resolve("config").resolve(DesktopScreens.MOD_ID + "-server.properties"));
+            *///?}
         }
         return loaded;
     }

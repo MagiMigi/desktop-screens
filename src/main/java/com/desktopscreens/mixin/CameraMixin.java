@@ -2,8 +2,10 @@ package com.desktopscreens.mixin;
 
 import com.desktopscreens.client.CameraGlide;
 import net.minecraft.client.Camera;
+//? if <26.1 {
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
+//?}
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -20,6 +22,21 @@ abstract class CameraMixin {
     @Shadow
     protected abstract void setRotation(float yRot, float xRot);
 
+    //? if >=26.1 {
+    /*@Shadow
+    public abstract Vec3 position();
+
+    @Shadow
+    public abstract float yRot();
+
+    @Shadow
+    public abstract float xRot();
+
+    /^* After Minecraft placed the camera at the player's eyes for this frame, before it works out what's in view. ^/
+    @Inject(method = "alignWithEntity", at = @At("TAIL"))
+    private void desktopscreens$glide(float partialTicks, CallbackInfo ci) {
+        CameraGlide.Pose pose = CameraGlide.apply(position(), yRot(), xRot());
+    *///?} else {
     @Shadow
     public abstract Vec3 getPosition();
 
@@ -34,6 +51,7 @@ abstract class CameraMixin {
     private void desktopscreens$glide(BlockGetter level, Entity entity, boolean detached, boolean thirdPersonReverse,
                                       float partialTick, CallbackInfo ci) {
         CameraGlide.Pose pose = CameraGlide.apply(getPosition(), getYRot(), getXRot());
+    //?}
         if (pose == null) return;
         setRotation(pose.yaw(), pose.pitch());
         setPosition(pose.position());

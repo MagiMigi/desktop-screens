@@ -1,6 +1,9 @@
 package com.desktopscreens.client;
 
 import net.minecraft.client.gui.GuiGraphics;
+//? if >=1.21.9 {
+/*import net.minecraft.client.input.InputWithModifiers;
+*///?}
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -22,12 +25,20 @@ final class ColorSwatch extends AbstractButton {
     }
 
     @Override
+    //? if >=1.21.9 {
+    /*public void onPress(InputWithModifiers input) {
+    *///?} else {
     public void onPress() {
+    //?}
         onPick.accept(rgb);
     }
 
     @Override
+    //? if >=26.1 {
+    /*protected void extractContents(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    *///?} else {
     protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    //?}
         int outline;
         if (!active) outline = 0xFF2A2A2A;
         else if (current.getAsInt() == rgb) outline = 0xFFFFFFFF;

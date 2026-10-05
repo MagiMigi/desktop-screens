@@ -2,10 +2,15 @@ package com.desktopscreens;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.UUIDUtil;
+//? if >=1.20.5 {
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.desktopscreens.net.ByteBufCodecs;
+import com.desktopscreens.net.StreamCodec;
+import com.desktopscreens.net.CustomPacketPayload;
+*///?}
 
 import java.util.List;
 import java.util.UUID;
@@ -24,7 +29,7 @@ public final class ShareStream {
     public static final UUID NO_ID = new UUID(0L, 0L);
     /** At most this many screens per message. */
     public static final int MAX_SCREENS = 64;
-    private static final StreamCodec<ByteBuf, List<UUID>> SCREENS = UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_SCREENS));
+    private static final StreamCodec<ByteBuf, List<UUID>> SCREENS = Codecs.UUID.apply(ByteBufCodecs.list(MAX_SCREENS));
 
     /** A screen's id for sharing: {@link #NO_ID} for one without. */
     public static UUID idOf(UUID screenId) {
@@ -37,6 +42,17 @@ public final class ShareStream {
     public static final int MAX_FRAME_BYTES = 1000000;
     /** 1 MB in pieces of 30 KB. */
     public static final int MAX_CHUNKS = (MAX_FRAME_BYTES + CHUNK_BYTES - 1) / CHUNK_BYTES;
+    /**
+     * How many pictures of a stream may be on their way at once, owner to server and server to each watcher, before
+     * the next waits for a receipt: so pictures go as fast as the connection takes them, and pile up nowhere. One is
+     * enough where messages are handled as they come. 26.1's server handles what players send once per tick (20 times
+     * a second), so with one, a stream never got past 20 pictures a second (2026-10-02); three leave room for 30.
+     */
+    //? if >=26.1 {
+    /*public static final int IN_FLIGHT = 3;
+    *///?} else {
+    public static final int IN_FLIGHT = 1;
+    //?}
 
     /** What the client does with the server's messages. Set when the client starts; null on a dedicated server. */
     public interface Client {
@@ -134,7 +150,7 @@ public final class ShareStream {
     public record Watch(BlockPos screen, boolean pictures, boolean sound, boolean h264) implements CustomPacketPayload {
         public static final Type<Watch> TYPE = new Type<>(DesktopScreens.id("share_watch"));
         public static final StreamCodec<ByteBuf, Watch> STREAM_CODEC = StreamCodec.composite(
-                BlockPos.STREAM_CODEC, Watch::screen, ByteBufCodecs.BOOL, Watch::pictures, ByteBufCodecs.BOOL, Watch::sound,
+                Codecs.BLOCK_POS, Watch::screen, ByteBufCodecs.BOOL, Watch::pictures, ByteBufCodecs.BOOL, Watch::sound,
                 ByteBufCodecs.BOOL, Watch::h264, Watch::new);
 
         public boolean stopped() {
@@ -160,7 +176,7 @@ public final class ShareStream {
     /** A screen someone has in sight, and whether everyone who has can decode H.264 (else its pictures go as JPEG). */
     public record Wanted(UUID screen, boolean h264) {
         public static final StreamCodec<ByteBuf, Wanted> STREAM_CODEC = StreamCodec.composite(
-                UUIDUtil.STREAM_CODEC, Wanted::screen, ByteBufCodecs.BOOL, Wanted::h264, Wanted::new);
+                Codecs.UUID, Wanted::screen, ByteBufCodecs.BOOL, Wanted::h264, Wanted::new);
     }
 
     /**
@@ -223,7 +239,7 @@ public final class ShareStream {
     public record Sound(UUID owner, int stream, List<UUID> screens, int seq, long played, byte[] opus) implements CustomPacketPayload {
         public static final Type<Sound> TYPE = new Type<>(DesktopScreens.id("share_sound"));
         public static final StreamCodec<ByteBuf, Sound> STREAM_CODEC = StreamCodec.composite(
-                UUIDUtil.STREAM_CODEC, Sound::owner, ByteBufCodecs.VAR_INT, Sound::stream, SCREENS, Sound::screens,
+                Codecs.UUID, Sound::owner, ByteBufCodecs.VAR_INT, Sound::stream, SCREENS, Sound::screens,
                 ByteBufCodecs.VAR_INT, Sound::seq, ByteBufCodecs.VAR_LONG, Sound::played,
                 ByteBufCodecs.byteArray(MAX_SOUND_BYTES), Sound::opus, Sound::new);
 
@@ -241,7 +257,7 @@ public final class ShareStream {
      */
     public record Keyframe(UUID screen) implements CustomPacketPayload {
         public static final Type<Keyframe> TYPE = new Type<>(DesktopScreens.id("share_keyframe"));
-        public static final StreamCodec<ByteBuf, Keyframe> STREAM_CODEC = UUIDUtil.STREAM_CODEC.map(Keyframe::new, Keyframe::screen);
+        public static final StreamCodec<ByteBuf, Keyframe> STREAM_CODEC = Codecs.UUID.map(Keyframe::new, Keyframe::screen);
 
         @Override
         public Type<Keyframe> type() {
@@ -267,7 +283,7 @@ public final class ShareStream {
     public record End(UUID owner, int stream) implements CustomPacketPayload {
         public static final Type<End> TYPE = new Type<>(DesktopScreens.id("share_end"));
         public static final StreamCodec<ByteBuf, End> STREAM_CODEC = StreamCodec.composite(
-                UUIDUtil.STREAM_CODEC, End::owner, ByteBufCodecs.VAR_INT, End::stream, End::new);
+                Codecs.UUID, End::owner, ByteBufCodecs.VAR_INT, End::stream, End::new);
 
         @Override
         public Type<End> type() {
@@ -323,7 +339,7 @@ public final class ShareStream {
     public record Frame(UUID owner, int stream, int frame, long taken, List<UUID> screens, byte[] picture) implements CustomPacketPayload {
         public static final Type<Frame> TYPE = new Type<>(DesktopScreens.id("share_frame"));
         public static final StreamCodec<ByteBuf, Frame> STREAM_CODEC = StreamCodec.composite(
-                UUIDUtil.STREAM_CODEC, Frame::owner,
+                Codecs.UUID, Frame::owner,
                 ByteBufCodecs.VAR_INT, Frame::stream,
                 ByteBufCodecs.VAR_INT, Frame::frame,
                 ByteBufCodecs.VAR_LONG, Frame::taken,
@@ -341,7 +357,7 @@ public final class ShareStream {
     public record Received(UUID owner, int stream, int frame) implements CustomPacketPayload {
         public static final Type<Received> TYPE = new Type<>(DesktopScreens.id("share_received"));
         public static final StreamCodec<ByteBuf, Received> STREAM_CODEC = StreamCodec.composite(
-                UUIDUtil.STREAM_CODEC, Received::owner, ByteBufCodecs.VAR_INT, Received::stream,
+                Codecs.UUID, Received::owner, ByteBufCodecs.VAR_INT, Received::stream,
                 ByteBufCodecs.VAR_INT, Received::frame, Received::new);
 
         @Override

@@ -2,9 +2,15 @@ package com.desktopscreens;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
+//? if >=1.20.5 {
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.desktopscreens.net.ByteBufCodecs;
+import com.desktopscreens.net.StreamCodec;
+import com.desktopscreens.net.CustomPacketPayload;
+*///?}
 
 /**
  * Client to server: the owner of the screen at {@code screen} shares it with the player called {@code name}, or stops
@@ -16,7 +22,7 @@ public record ShareScreen(BlockPos screen, String name, boolean add, boolean all
     /** Minecraft names are at most 16 characters. */
     public static final int MAX_NAME = 16;
     public static final StreamCodec<ByteBuf, ShareScreen> STREAM_CODEC = StreamCodec.composite(
-            BlockPos.STREAM_CODEC, ShareScreen::screen,
+            Codecs.BLOCK_POS, ShareScreen::screen,
             ByteBufCodecs.stringUtf8(MAX_NAME), ShareScreen::name,
             ByteBufCodecs.BOOL, ShareScreen::add,
             ByteBufCodecs.BOOL, ShareScreen::allScreens,

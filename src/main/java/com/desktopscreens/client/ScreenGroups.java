@@ -4,6 +4,7 @@ import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -112,7 +113,7 @@ final class ScreenGroups {
             // Undoes frontPoint: columns along the viewer's right, from the origin block's left edge.
             double col = (p.x - origin.getX() - 0.5) * right.getStepX() + (p.z - origin.getZ() - 0.5) * right.getStepZ() + 0.5;
             double row = p.y - origin.getY();
-            return frontPoint(Math.clamp(col, minCol, minCol + cols), Math.clamp(row, minRow, minRow + rows));
+            return frontPoint(Mth.clamp(col, minCol, minCol + cols), Mth.clamp(row, minRow, minRow + rows));
         }
 
         /** The block that speaks for the whole screen: its owner, and whom it's shared with. */

@@ -15,6 +15,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+//? if >=26.3 {
+/*import net.minecraft.util.Prediction;
+*///?}
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -74,7 +77,11 @@ public final class ScreenBuilder {
     }
 
     private static ScreenBlock screenBlock() {
+        //? if >=1.21.2 {
+        /*return (ScreenBlock) BuiltInRegistries.BLOCK.getValue(DesktopScreens.id(ScreenBlock.NAME));
+        *///?} else {
         return (ScreenBlock) BuiltInRegistries.BLOCK.get(DesktopScreens.id(ScreenBlock.NAME));
+        //?}
     }
 
     /**
@@ -92,12 +99,12 @@ public final class ScreenBuilder {
      * counting both said "Too far away" 5 blocks from the hologram of a screen moved far (2026-09-25).
      */
     public static double reach(ServerPlayer player) {
-        return BuilderRules.of(player.server).range();
+        return BuilderRules.of(Players.server(player)).range();
     }
 
     /** Whether the screen is close enough to {@code player} to be built. */
     public static boolean inRange(Player player, BlockPos from, BlockPos to, double reach) {
-        return AABB.encapsulatingFullBlocks(from, to).distanceToSqr(player.getEyePosition()) <= reach * reach;
+        return new AABB(from).minmax(new AABB(to)).distanceToSqr(player.getEyePosition()) <= reach * reach;
     }
 
     /** Whether blocks of a screen are close enough to {@code player} to be changed (none: yes). */
@@ -277,7 +284,7 @@ public final class ScreenBuilder {
      */
     public static boolean inUseByOther(ServerPlayer player, ScreenBlockEntity screen) {
         UUID owner = screen.owner();
-        return owner != null && !owner.equals(player.getUUID()) && player.server.getPlayerList().getPlayer(owner) != null;
+        return owner != null && !owner.equals(player.getUUID()) && Players.server(player).getPlayerList().getPlayer(owner) != null;
     }
 
     /** How many screens {@code player} carries. */
@@ -305,7 +312,7 @@ public final class ScreenBuilder {
             say(player, "desktopscreens.builder.cant_build");
             return;
         }
-        BuilderRules rules = BuilderRules.of(player.server);
+        BuilderRules rules = BuilderRules.of(Players.server(player));
         if (size[0] > rules.maxWidth() || size[1] > rules.maxHeight()) {
             say(player, "desktopscreens.builder.too_big", rules.maxWidth(), rules.maxHeight());
             return;
@@ -314,7 +321,7 @@ public final class ScreenBuilder {
             say(player, "desktopscreens.builder.too_far");
             return;
         }
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = Players.level(player);
         List<BlockPos> cells = cells(from, to);
         for (BlockPos cell : cells) {
             if (!level.mayInteract(player, cell)) { // spawn protection
@@ -333,10 +340,10 @@ public final class ScreenBuilder {
             if (!fits(level, cell, panel)) blocked.add(cell);
         }
         if (!blocked.isEmpty()) {
-            player.displayClientMessage(inTheWay(level, blocked, facing, List.of()), true);
+            Players.overlay(player, inTheWay(level, blocked, facing, List.of()));
             return;
         }
-        boolean free = player.hasInfiniteMaterials();
+        boolean free = player.getAbilities().instabuild;
         if (!free) {
             int have = screensIn(player);
             if (have < cells.size()) {
@@ -358,7 +365,7 @@ public final class ScreenBuilder {
         announcePlaced(level, player, cells);
         joinOwner(level, cells);
         if (!free) take(player, cells.size());
-        AABB box = AABB.encapsulatingFullBlocks(from, to);
+        AABB box = new AABB(from).minmax(new AABB(to));
         level.playSound(null, box.getCenter().x, box.getCenter().y, box.getCenter().z,
                 ScreenBlock.SOUND.getPlaceSound(), SoundSource.BLOCKS, 1.0F, 0.8F);
         say(player, "desktopscreens.builder.built", size[0], size[1]);
@@ -410,7 +417,7 @@ public final class ScreenBuilder {
      * same owner, shared with the same players. Says in the action bar what happened.
      */
     public static void change(ServerPlayer player, ChangeScreen request) {
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = Players.level(player);
         BlockPos at = request.screen();
         if (player.isSpectator() || builderHand(player) == null) return;
         if (!level.isLoaded(at)) { // carried away from where it was, beyond what's loaded
@@ -437,7 +444,7 @@ public final class ScreenBuilder {
                 int[] size = size(from, to, facing);
                 Direction.Axis depth = facing.getAxis();
                 if (size == null || depth.choose(from.getX(), from.getY(), from.getZ()) != depth.choose(at.getX(), at.getY(), at.getZ())) return;
-                BuilderRules rules = BuilderRules.of(player.server);
+                BuilderRules rules = BuilderRules.of(Players.server(player));
                 if (size[0] > rules.maxWidth() || size[1] > rules.maxHeight()) {
                     say(player, "desktopscreens.builder.too_big", rules.maxWidth(), rules.maxHeight());
                     return;
@@ -480,14 +487,14 @@ public final class ScreenBuilder {
         }
         Obstacles obstacles = obstacles(level, change, after, newFacing, true);
         if (!obstacles.inTheWay().isEmpty()) {
-            player.displayClientMessage(inTheWay(level, obstacles.inTheWay(), newFacing, change.leaving()), true);
+            Players.overlay(player, inTheWay(level, obstacles.inTheWay(), newFacing, change.leaving()));
             return;
         }
         if (!obstacles.joining().isEmpty()) {
             say(player, "desktopscreens.builder.joins_other");
             return;
         }
-        boolean free = player.hasInfiniteMaterials();
+        boolean free = player.getAbilities().instabuild;
         int needed = change.added().size() - change.leaving().size();
         if (!free && needed > 0) {
             int have = screensIn(player);
@@ -547,7 +554,11 @@ public final class ScreenBuilder {
         int stackSize = new ItemStack(item).getMaxStackSize();
         while (count > 0) {
             int n = Math.min(count, stackSize);
+            //? if >=26.3 {
+            /*player.getInventory().placeItemBackInInventory(new ItemStack(item, n), Prediction.SERVER_ONLY);
+            *///?} else {
             player.getInventory().placeItemBackInInventory(new ItemStack(item, n));
+            //?}
             count -= n;
         }
     }
@@ -565,6 +576,6 @@ public final class ScreenBuilder {
     }
 
     private static void say(Player player, String key, Object... args) {
-        player.displayClientMessage(Component.translatable(key, args), true);
+        Players.overlay(player, Component.translatable(key, args));
     }
 }

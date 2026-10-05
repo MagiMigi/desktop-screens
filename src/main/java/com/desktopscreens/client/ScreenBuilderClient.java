@@ -4,36 +4,56 @@ import com.desktopscreens.BuildScreen;
 import com.desktopscreens.BuilderRules;
 import com.desktopscreens.ChangeScreen;
 import com.desktopscreens.DesktopScreens;
+import com.desktopscreens.Players;
 import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBuilder;
+//? if >=26.2 {
+/*import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+*///?} else if >=26.1 {
+/*import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+*///?} else {
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.MeshData;
-import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Camera;
+import net.minecraft.client.renderer.GameRenderer;
+//?}
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
+//? if >=1.20.5 {
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.desktopscreens.net.CustomPacketPayload;
+*///?}
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+//? if >=26.3 {
+/*import net.minecraft.world.item.component.SwingAnimation;
+*///?}
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+//? if >=1.20.5 && <26.1 {
 import org.joml.Matrix4fStack;
 import org.joml.Quaternionf;
+//?} else if <1.20.5 {
+/*import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import org.joml.Quaternionf;
+*///?}
 
 import java.util.HashSet;
 import java.util.List;
@@ -151,8 +171,8 @@ public final class ScreenBuilderClient {
         if (hand == null) return false;
         if (mode != null) {
             attackHeld = true;
-            player.displayClientMessage(Component.translatable(mode == Mode.BUILD ? "desktopscreens.builder.cancelled"
-                    : "desktopscreens.builder.change_cancelled"), true);
+            Players.overlay(player, Component.translatable(mode == Mode.BUILD ? "desktopscreens.builder.cancelled"
+                    : "desktopscreens.builder.change_cancelled"));
             chime(mc, 0.7F);
             stop();
             return true;
@@ -171,11 +191,11 @@ public final class ScreenBuilderClient {
 
     private static void start(Minecraft mc, LocalPlayer player, InteractionHand hand) {
         if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
-            player.displayClientMessage(Component.translatable("desktopscreens.builder.look_at_block"), true);
+            Players.overlay(player, Component.translatable("desktopscreens.builder.look_at_block"));
             return;
         }
         if (!player.mayBuild()) {
-            player.displayClientMessage(Component.translatable("desktopscreens.builder.cant_build"), true);
+            Players.overlay(player, Component.translatable("desktopscreens.builder.cant_build"));
             return;
         }
         BlockPos pos = hit.getBlockPos();
@@ -203,11 +223,11 @@ public final class ScreenBuilderClient {
         ScreenGroups.Group screen = hit == null ? null : ScreenGroups.of(mc.level, hit.getBlockPos());
         if (screen == null) return false;
         if (!player.mayBuild()) {
-            player.displayClientMessage(Component.translatable("desktopscreens.builder.cant_build"), true);
+            Players.overlay(player, Component.translatable("desktopscreens.builder.cant_build"));
             return true;
         }
         if (inUseByOther(mc, screen)) {
-            player.displayClientMessage(Component.translatable("desktopscreens.screen.in_use", screen.ownerName(mc.level)), true);
+            Players.overlay(player, Component.translatable("desktopscreens.screen.in_use", screen.ownerName(mc.level)));
             return true;
         }
         level = mc.level;
@@ -300,11 +320,11 @@ public final class ScreenBuilderClient {
         check(mc);
         Component problem = problem(player);
         if (problem != null) {
-            player.displayClientMessage(problem, true);
+            Players.overlay(player, problem);
             return;
         }
         if (mode != Mode.BUILD && change.added().isEmpty() && change.leaving().isEmpty()) {
-            player.displayClientMessage(Component.translatable("desktopscreens.builder.change_cancelled"), true);
+            Players.overlay(player, Component.translatable("desktopscreens.builder.change_cancelled"));
             stop();
             return;
         }
@@ -314,7 +334,7 @@ public final class ScreenBuilderClient {
             case MOVE -> new ChangeScreen(grabbed, ChangeScreen.Action.MOVE, base, base, facing);
             case TAKE_DOWN -> new ChangeScreen(grabbed, ChangeScreen.Action.TAKE_DOWN, grabbed, grabbed, oldFacing);
         };
-        mc.getConnection().send(new ServerboundCustomPayloadPacket(request));
+        ClientNet.toServer(mc.getConnection(), request);
         player.swing(hand);
         stop();
     }
@@ -336,7 +356,12 @@ public final class ScreenBuilderClient {
 
     private static void chime(Minecraft mc, float pitch) {
         if (mc.level != null && mc.player != null) {
+            //? if >=1.20.5 {
             mc.level.playLocalSound(mc.player, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.8F, pitch);
+            //?} else {
+            /*mc.level.playLocalSound(mc.player.getX(), mc.player.getY(), mc.player.getZ(), SoundEvents.AMETHYST_BLOCK_CHIME,
+                    SoundSource.PLAYERS, 0.8F, pitch, false);
+            *///?}
         }
     }
 
@@ -356,7 +381,7 @@ public final class ScreenBuilderClient {
             return;
         }
         if (mode != Mode.BUILD && changedMeanwhile()) {
-            player.displayClientMessage(Component.translatable("desktopscreens.builder.screen_changed"), true);
+            Players.overlay(player, Component.translatable("desktopscreens.builder.screen_changed"));
             stop();
             return;
         }
@@ -408,7 +433,7 @@ public final class ScreenBuilderClient {
             }
         }
         int needed = change.added().size() - change.leaving().size();
-        if (!player.hasInfiniteMaterials() && needed > screensHeld) {
+        if (!player.getAbilities().instabuild && needed > screensHeld) {
             return Component.translatable("desktopscreens.builder.need_screens", needed, screensHeld);
         }
         return null;
@@ -428,9 +453,19 @@ public final class ScreenBuilderClient {
     // ---- The hologram ----
 
     /** Every frame, after the world's see-through parts: follows the view and draws the hologram. */
+    //? if >=26.2 {
+    /*static void render(Minecraft mc, Vec3 camera, SubmitNodeCollector out, PoseStack pose) {
+    *///?} else if >=26.1 {
+    /*static void render(Minecraft mc, Vec3 camera) {
+    *///?} else {
     static void render(Minecraft mc, Camera camera) {
+    //?}
         if (mode == null || mc.player == null || mc.level != level) return;
+        //? if >=1.21 {
         float partialTick = mc.getTimer().getGameTimeDeltaPartialTick(true);
+        //?} else {
+        /*float partialTick = mc.getFrameTime();
+        *///?}
         Vec3 eye = mc.player.getEyePosition(partialTick), look = mc.player.getViewVector(partialTick);
         switch (mode) {
             case BUILD -> stretch(eye, look, false, false);
@@ -439,7 +474,11 @@ public final class ScreenBuilderClient {
             case TAKE_DOWN -> {}
         }
         check(mc);
+        //? if >=26.2 {
+        /*draw(out, pose, camera, problem(mc.player) == null);
+        *///?} else {
         draw(camera, problem(mc.player) == null);
+        //?}
     }
 
     /**
@@ -462,7 +501,11 @@ public final class ScreenBuilderClient {
                         1 - rules.maxWidth(), rules.maxWidth() - 1);
         int rows = keepRow ? corner.getY() - anchor.getY()
                 : Mth.clamp(Mth.floor(hit.y) - anchor.getY(), 1 - rules.maxHeight(), rules.maxHeight() - 1);
+        //? if >=1.21.2 {
+        /*int y = Mth.clamp(anchor.getY() + rows, level.getMinY(), level.getMaxY());
+        *///?} else {
         int y = Mth.clamp(anchor.getY() + rows, level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
+        //?}
         corner = new BlockPos(anchor.getX() + cols * right.getStepX(), y, anchor.getZ() + cols * right.getStepZ());
     }
 
@@ -493,15 +536,52 @@ public final class ScreenBuilderClient {
         base = target.relative(ScreenBuilder.right(facing), -grabCol).below(row);
     }
 
+    //? if >=26.2 {
+    /*/^*
+     * Handed in with the world's other things, which 26.2 draws later, all together. In the world's coordinates less
+     * the camera's: the game turns the view the way the camera looks.
+     ^/
+    private static void draw(SubmitNodeCollector out, PoseStack pose, Vec3 cam, boolean ok) {
+        int color = ok ? GREEN : RED;
+        float pulse = pulse();
+        // See-through, both sides, never hiding what's behind it.
+        out.submitCustomGeometry(pose, RenderTypes.debugQuads(), (at, quads) -> panels(quads, cam, color, pulse));
+        // A line between every two blocks on the front, so the size can be counted.
+        out.submitCustomGeometry(pose, RenderTypes.linesTranslucent(),
+                (at, lines) -> grid(lines, after, afterSet, facing, color, 0.9F * pulse, cam));
+    }
+    *///?} else if >=26.1 {
+    /*/^* In the world's coordinates less the camera's: the game has already turned the view the way the camera looks. ^/
+    private static void draw(Vec3 cam, boolean ok) {
+        int color = ok ? GREEN : RED;
+        float pulse = pulse();
+        MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
+        // See-through, both sides, never hiding what's behind it.
+        panels(buffers.getBuffer(RenderTypes.debugQuads()), cam, color, pulse);
+        buffers.endBatch(RenderTypes.debugQuads());
+        // A line between every two blocks on the front, so the size can be counted.
+        grid(buffers.getBuffer(RenderTypes.linesTranslucent()), after, afterSet, facing, color, 0.9F * pulse, cam);
+        buffers.endBatch(RenderTypes.linesTranslucent());
+    }
+    *///?} else {
     private static void draw(Camera camera, boolean ok) {
         Vec3 cam = camera.getPosition();
         int color = ok ? GREEN : RED;
-        float pulse = 0.85F + 0.15F * Mth.sin((System.nanoTime() % 2_000_000_000L) / 2e9F * Mth.TWO_PI);
+        float pulse = pulse();
 
         // Drawn relative to the camera, turned the way it looks: set here rather than taken from the loader's hook.
+        //? if >=1.20.5 {
         Matrix4fStack view = RenderSystem.getModelViewStack();
         view.pushMatrix();
         view.identity().rotate(camera.rotation().conjugate(new Quaternionf()));
+        //?} else {
+        /*// As the game turns the world before 1.20.5: its camera kept its rotation the other way round then.
+        PoseStack view = RenderSystem.getModelViewStack();
+        view.pushPose();
+        view.setIdentity();
+        view.mulPose(Axis.XP.rotationDegrees(camera.getXRot()));
+        view.mulPose(Axis.YP.rotationDegrees(camera.getYRot() + 180.0F));
+        *///?}
         RenderSystem.applyModelViewMatrix();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -509,30 +589,42 @@ public final class ScreenBuilderClient {
         RenderSystem.disableCull();
         RenderSystem.depthMask(false);
 
-        // See-through panels where the screen will be, amber over its blocks that go, red boxes around what's in the way.
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferBuilder quads = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-        for (BlockPos cell : after) panel(quads, cell, facing, afterSet, color, 0.22F * pulse, cam);
-        for (BlockPos cell : change.leaving()) box(quads, cellPanel(cell, oldFacing).inflate(0.01).move(-cam.x, -cam.y, -cam.z), AMBER, 0.3F * pulse);
-        for (BlockPos pos : blocked) box(quads, new AABB(pos).inflate(0.004).move(-cam.x, -cam.y, -cam.z), RED, 0.4F);
-        for (BlockPos pos : joining) box(quads, new AABB(pos).inflate(0.004).move(-cam.x, -cam.y, -cam.z), RED, 0.4F);
-        MeshData mesh = quads.build();
-        if (mesh != null) BufferUploader.drawWithShader(mesh);
+        BufferBuilder quads = Vertices.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        panels(quads, cam, color, pulse);
+        Vertices.draw(quads);
 
         // A line between every two blocks on the front, so the size can be counted.
         RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
         RenderSystem.lineWidth(2.0F);
-        BufferBuilder lines = Tesselator.getInstance().begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL);
+        BufferBuilder lines = Vertices.begin(VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL);
         grid(lines, after, afterSet, facing, color, 0.9F * pulse, cam);
-        mesh = lines.build();
-        if (mesh != null) BufferUploader.drawWithShader(mesh);
+        Vertices.draw(lines);
         RenderSystem.lineWidth(1.0F);
 
         RenderSystem.depthMask(true);
         RenderSystem.enableCull();
         RenderSystem.disableBlend();
+        //? if >=1.20.5 {
         view.popMatrix();
+        //?} else {
+        /*view.popPose();
+        *///?}
         RenderSystem.applyModelViewMatrix();
+    }
+    //?}
+
+    /** The hologram's slow glow, between 0.7 and 1. */
+    private static float pulse() {
+        return 0.85F + 0.15F * Mth.sin((System.nanoTime() % 2_000_000_000L) / 2e9F * Mth.TWO_PI);
+    }
+
+    /** See-through panels where the screen will be, amber over its blocks that go, red boxes around what's in the way. */
+    private static void panels(VertexConsumer quads, Vec3 cam, int color, float pulse) {
+        for (BlockPos cell : after) panel(quads, cell, facing, afterSet, color, 0.22F * pulse, cam);
+        for (BlockPos cell : change.leaving()) box(quads, cellPanel(cell, oldFacing).inflate(0.01).move(-cam.x, -cam.y, -cam.z), AMBER, 0.3F * pulse);
+        for (BlockPos pos : blocked) box(quads, new AABB(pos).inflate(0.004).move(-cam.x, -cam.y, -cam.z), RED, 0.4F);
+        for (BlockPos pos : joining) box(quads, new AABB(pos).inflate(0.004).move(-cam.x, -cam.y, -cam.z), RED, 0.4F);
     }
 
     /** A screen block's panel in the world: the back 2/16 of its block, the way it faces. */
@@ -550,7 +642,7 @@ public final class ScreenBuilderClient {
      * One block of the see-through hologram: its front and back, and its sides only where the screen ends, so no
      * seams show between blocks. A hair bigger than a screen block, so it shows over one that's there.
      */
-    private static void panel(BufferBuilder out, BlockPos cell, Direction facing, Set<BlockPos> screen, int rgb, float alpha, Vec3 cam) {
+    private static void panel(VertexConsumer out, BlockPos cell, Direction facing, Set<BlockPos> screen, int rgb, float alpha, Vec3 cam) {
         AABB b = cellPanel(cell, facing).inflate(0.003).move(-cam.x, -cam.y, -cam.z);
         float x0 = (float) b.minX, y0 = (float) b.minY, z0 = (float) b.minZ;
         float x1 = (float) b.maxX, y1 = (float) b.maxY, z1 = (float) b.maxZ;
@@ -570,7 +662,7 @@ public final class ScreenBuilderClient {
         if (!screen.contains(cell.above())) quad(out, rgb, alpha, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1);
     }
 
-    private static void box(BufferBuilder out, AABB b, int rgb, float alpha) {
+    private static void box(VertexConsumer out, AABB b, int rgb, float alpha) {
         float x0 = (float) b.minX, y0 = (float) b.minY, z0 = (float) b.minZ;
         float x1 = (float) b.maxX, y1 = (float) b.maxY, z1 = (float) b.maxZ;
         quad(out, rgb, alpha, x0, y0, z0, x1, y0, z0, x1, y1, z0, x0, y1, z0);
@@ -581,15 +673,15 @@ public final class ScreenBuilderClient {
         quad(out, rgb, alpha, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1);
     }
 
-    private static void quad(BufferBuilder out, int rgb, float alpha, float... xyz) {
-        for (int i = 0; i < 12; i += 3) out.addVertex(xyz[i], xyz[i + 1], xyz[i + 2]).setColor(rgb | (int) (alpha * 255) << 24);
+    private static void quad(VertexConsumer out, int rgb, float alpha, float... xyz) {
+        for (int i = 0; i < 12; i += 3) Vertices.posColor(out, xyz[i], xyz[i + 1], xyz[i + 2], rgb | (int) (alpha * 255) << 24);
     }
 
     /**
      * Lines on the front of the hologram: the outline, and one between every two blocks. Each line once: every block
      * draws its low-side and bottom lines, and its high-side and top lines only where the screen ends.
      */
-    private static void grid(BufferBuilder out, List<BlockPos> cells, Set<BlockPos> screen, Direction facing, int rgb, float alpha, Vec3 cam) {
+    private static void grid(VertexConsumer out, List<BlockPos> cells, Set<BlockPos> screen, Direction facing, int rgb, float alpha, Vec3 cam) {
         boolean alongX = facing.getAxis() == Direction.Axis.Z; // the columns run along x
         boolean positive = facing.getAxisDirection() == Direction.AxisDirection.POSITIVE;
         int argb = rgb | (int) (alpha * 255) << 24;
@@ -606,16 +698,16 @@ public final class ScreenBuilderClient {
     }
 
     /** A line on the front plane, from (across, y) to (across, y); the lines shader wants its direction as the normal. */
-    private static void line(BufferBuilder out, int argb, boolean alongX, float depth, float a0, float y0, float a1, float y1) {
+    private static void line(VertexConsumer out, int argb, boolean alongX, float depth, float a0, float y0, float a1, float y1) {
         float da = a1 - a0, dy = y1 - y0;
         float length = Mth.sqrt(da * da + dy * dy);
         float na = da / length, ny = dy / length;
         if (alongX) {
-            out.addVertex(a0, y0, depth).setColor(argb).setNormal(na, ny, 0);
-            out.addVertex(a1, y1, depth).setColor(argb).setNormal(na, ny, 0);
+            Vertices.line(out, a0, y0, depth, argb, na, ny, 0, 2.0F);
+            Vertices.line(out, a1, y1, depth, argb, na, ny, 0, 2.0F);
         } else {
-            out.addVertex(depth, y0, a0).setColor(argb).setNormal(0, ny, na);
-            out.addVertex(depth, y1, a1).setColor(argb).setNormal(0, ny, na);
+            Vertices.line(out, depth, y0, a0, argb, 0, ny, na, 2.0F);
+            Vertices.line(out, depth, y1, a1, argb, 0, ny, na, 2.0F);
         }
     }
 
@@ -637,21 +729,21 @@ public final class ScreenBuilderClient {
             case MOVE -> Component.translatable("desktopscreens.builder.moving", oldBounds.cols(), oldBounds.rows());
             case TAKE_DOWN -> Component.translatable("desktopscreens.builder.take_down_title", oldBounds.cols(), oldBounds.rows());
         };
-        g.drawCenteredString(mc.font, title, x, y, problem != null ? 0xFF7070 : mode == Mode.TAKE_DOWN ? 0xFFC870 : 0x80FF9F);
+        GuiDraw.centeredText(g, mc.font, title, x, y, problem != null ? 0xFF7070 : mode == Mode.TAKE_DOWN ? 0xFFC870 : 0x80FF9F);
         y += 10;
         Component shape = size == null ? null : shapeHint(size[0], size[1]);
         if (shape != null) {
-            g.drawCenteredString(mc.font, shape, x, y, 0xB0B0B0);
+            GuiDraw.centeredText(g, mc.font, shape, x, y, 0xB0B0B0);
             y += 10;
         }
         int needed = change.added().size() - change.leaving().size();
-        if (mode != Mode.BUILD && needed != 0 && !mc.player.hasInfiniteMaterials()) { // in creative they're free
-            g.drawCenteredString(mc.font, Component.translatable(needed > 0 ? "desktopscreens.builder.screens_used" : "desktopscreens.builder.screens_back",
+        if (mode != Mode.BUILD && needed != 0 && !mc.player.getAbilities().instabuild) { // in creative they're free
+            GuiDraw.centeredText(g, mc.font, Component.translatable(needed > 0 ? "desktopscreens.builder.screens_used" : "desktopscreens.builder.screens_back",
                     Math.abs(needed)), x, y, 0xB0B0B0);
             y += 10;
         }
         if (problem != null) {
-            g.drawCenteredString(mc.font, problem, x, y, 0xFF7070);
+            GuiDraw.centeredText(g, mc.font, problem, x, y, 0xFF7070);
             y += 10;
         }
         Component cancel = DesktopClient.key(mc.options.keyAttack), confirm = DesktopClient.key(mc.options.keyUse);
@@ -661,7 +753,7 @@ public final class ScreenBuilderClient {
             case MOVE -> "desktopscreens.builder.keys_move";
             case TAKE_DOWN -> "desktopscreens.builder.keys_take_down";
         };
-        g.drawCenteredString(mc.font, Component.translatable(keys, cancel, confirm), x, y, 0xE0E0E0);
+        GuiDraw.centeredText(g, mc.font, Component.translatable(keys, cancel, confirm), x, y, 0xE0E0E0);
         return true;
     }
 
@@ -684,11 +776,11 @@ public final class ScreenBuilderClient {
             Component takeDown = DesktopClient.key(mc.options.keyShift, mc.options.keyAttack), grab = DesktopClient.key(mc.options.keyShift, mc.options.keyUse);
             Component keys = Component.translatable(grip.middle() ? "desktopscreens.builder.screen_keys_move" : "desktopscreens.builder.screen_keys_resize", takeDown, grab);
             lines = grip.middle() ? List.of(keys)
-                    : List.of(keys, Component.translatable("desktopscreens.builder.grip", gripName(grip)).withColor(0xB0B0B0));
+                    : List.of(keys, Component.translatable("desktopscreens.builder.grip", gripName(grip)).withStyle(s -> s.withColor(0xB0B0B0)));
         }
         int x = g.guiWidth() / 2, y = g.guiHeight() / 2 + 16;
         if (mc.player.isShiftKeyDown()) {
-            for (int i = 0; i < lines.size(); i++) g.drawCenteredString(mc.font, lines.get(i), x, y + i * 12, 0xE0E0E0);
+            for (int i = 0; i < lines.size(); i++) GuiDraw.centeredText(g, mc.font, lines.get(i), x, y + i * 12, 0xE0E0E0);
         } else {
             screenFade.draw(g, mc.font, "screen " + screen.anchor() + " " + taken, lines, x, y, 0xE0E0E0);
         }

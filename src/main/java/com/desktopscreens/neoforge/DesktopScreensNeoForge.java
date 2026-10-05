@@ -6,6 +6,7 @@ import com.desktopscreens.BuilderRules;
 import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.LandClaims;
 import com.desktopscreens.OwnedScreens;
+import com.desktopscreens.Players;
 import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBlockEntity;
 import com.desktopscreens.ScreenBuilder;
@@ -35,12 +36,25 @@ import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
+//? if >=1.21.2 {
+/*import java.util.Set;
+*///?}
 
 @Mod(DesktopScreens.MOD_ID)
 public final class DesktopScreensNeoForge {
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(DesktopScreens.MOD_ID);
     private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(DesktopScreens.MOD_ID);
     // Items in the same order as on Fabric, so their numbers match when a client of one joins a server of the other.
+    //? if >=1.21.2 {
+    /*// Properties are made per entry from 1.21.2 on, when NeoForge gives them the entry's id.
+    static final DeferredItem<TabletItem> TABLET = ITEMS.registerItem(TabletItem.NAME, TabletItem::new, TabletItem::properties);
+    static final DeferredBlock<ScreenBlock> SCREEN = BLOCKS.registerBlock(ScreenBlock.NAME, ScreenBlock::new, ScreenBlock::defaultProperties);
+    static final DeferredItem<BlockItem> SCREEN_ITEM = ITEMS.registerSimpleBlockItem(SCREEN);
+    static final DeferredItem<ScreenBuilderItem> SCREEN_BUILDER = ITEMS.registerItem(ScreenBuilderItem.NAME, ScreenBuilderItem::new, ScreenBuilderItem::properties);
+    private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, DesktopScreens.MOD_ID);
+    static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ScreenBlockEntity>> SCREEN_ENTITY = BLOCK_ENTITIES.register(
+            ScreenBlock.NAME, () -> new BlockEntityType<>(ScreenBlockEntity::new, Set.of(SCREEN.get())));
+    *///?} else {
     static final DeferredItem<TabletItem> TABLET = ITEMS.registerItem(TabletItem.NAME, TabletItem::new, TabletItem.properties());
     static final DeferredBlock<ScreenBlock> SCREEN = BLOCKS.registerBlock(ScreenBlock.NAME, ScreenBlock::new, ScreenBlock.defaultProperties());
     static final DeferredItem<BlockItem> SCREEN_ITEM = ITEMS.registerSimpleBlockItem(SCREEN);
@@ -48,6 +62,7 @@ public final class DesktopScreensNeoForge {
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, DesktopScreens.MOD_ID);
     static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ScreenBlockEntity>> SCREEN_ENTITY = BLOCK_ENTITIES.register(
             ScreenBlock.NAME, () -> BlockEntityType.Builder.of(ScreenBlockEntity::new, SCREEN.get()).build(null));
+    //?}
 
     public DesktopScreensNeoForge(IEventBus modBus, ModContainer container, Dist dist) {
         ScreenBlockEntity.type = SCREEN_ENTITY;
@@ -121,7 +136,7 @@ public final class DesktopScreensNeoForge {
         NeoForge.EVENT_BUS.addListener(PlayerEvent.PlayerLoggedInEvent.class, event -> {
             if (!(event.getEntity() instanceof ServerPlayer player)) return;
             OwnedScreens.joined(player);
-            if (player.connection.hasChannel(BuilderRules.TYPE)) PacketDistributor.sendToPlayer(player, BuilderRules.of(player.server));
+            if (player.connection.hasChannel(BuilderRules.TYPE)) PacketDistributor.sendToPlayer(player, BuilderRules.of(Players.server(player)));
             ScreenSharing.sendLists(player);
         });
         if (dist.isClient()) DesktopScreensNeoForgeClient.init(modBus, container);

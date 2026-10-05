@@ -1,0 +1,15 @@
+[
+  {
+    "modid": "${mod_id}",
+    "name": "${mod_name}",
+    "description": "${description}",
+    "version": "${version}",
+    "mcversion": "${minecraft}",
+    "url": "https://github.com/MagiMigi/desktop-screens",
+    "authorList": ["${mod_author}"],
+    "credits": "",
+    "logoFile": "assets/${mod_id}/icon.png",
+    "screenshots": [],
+    "dependencies": []
+  }
+]

@@ -1,0 +1,250 @@
+// Builds the Forge jar for Minecraft 1.12.2 from legacy/src and ../core.
+//
+// Minecraft 1.12.2 brings JNA 4.4.0 with the platform classes of 3.4.0; core needs JNA 5. So the client's code
+// (com.desktopscreens.client), core and our own JNA 5 are loaded apart from the game's classes, by
+// boot/ClientLoader. JNA goes into the jar as two jars of its own (desktopscreens/lib), never among our classes.
+plugins {
+    id 'java'
+    id 'com.gtnewhorizons.retrofuturagradle' version '2.0.6'
+}
+
+// The mod's name, version and author: the same for every Minecraft version (../gradle.properties).
+def shared = new Properties()
+file('../gradle.properties').withInputStream { shared.load(it) }
+version = shared.version
+group = shared.group
+def modId = shared.mod_id
+def minecraftVersion = '1.12.2'
+// JNA 5 for core; the version Minecraft 1.21.1 bundles, which core was written and tested against.
+def jnaVersion = '5.14.0'
+
+base.archivesName = "${modId}-forge-${minecraftVersion}"
+// The test game of this version (worlds, settings, logs), next to the other versions' ones.
+def runFolder = file("../runs/${minecraftVersion}-forge")
+
+java {
+    // The game runs on Java 8.
+    toolchain.languageVersion = JavaLanguageVersion.of(8)
+}
+
+// Newer Java syntax (switch with arrows, instanceof with a name) compiled for Java 8 through Jabel, so code from the
+// main build reads the same here. Only syntax: Java 9+ classes and methods (List.of...) and records aren't there.
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    if (name in ['compileMcLauncherJava', 'compilePatchedMcJava']) return
+    sourceCompatibility = 17
+    options.release = 8
+    options.compilerArgs << '-Xlint:-options' // "source value 8 is obsolete": intentional
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+// A second player for tests on a server, in its own folder: "gradlew -p legacy runClient -Pplayer=Alex"
+// (runs/1.12.2-forge/client-alex).
+def player = findProperty('player')
+
+minecraft {
+    mcVersion = minecraftVersion
+    // A fixed name that reads well in screenshots, as on the other versions.
+    username = player ?: 'MagiMigi'
+    injectedTags.put('VERSION', project.version)
+}
+
+tasks.named('injectTags') {
+    outputClassName = 'com.desktopscreens.Tags'
+}
+
+tasks.named('runClient') {
+    workingDir = new File(runFolder, player ? "client-${player.toLowerCase()}" : 'client')
+}
+
+// The real jar (reobfuscated, as players get it) in the obfuscated game, like a normal Forge install: runObfClient,
+// in its own folder, with the jar copied into its mods folder.
+def obfFolder = new File(runFolder, 'client-obf')
+tasks.named('runObfClient') {
+    workingDir = obfFolder
+}
+tasks.named('prepareObfModsFolder', Copy) {
+    destinationDir = new File(obfFolder, 'mods')
+}
+
+// The test server: tools\server.cmd forge 1.12.2, which writes its server.properties first (RetroFuturaGradle would
+// ask for it, and for the EULA, on the console). With -PwithoutMod (tools\server.cmd forge-nomod 1.12.2), a Forge
+// server without this mod, in its own folder: the mod is only on its class path as the dev jar.
+def withoutMod = findProperty('withoutMod') != null
+tasks.named('runServer') {
+    // A claim mod leaves its data in the world, which a server without it would then ask about: a folder of its own.
+    workingDir = new File(runFolder, withoutMod ? 'server-nomod' : findProperty('claims') ? "server-${findProperty('claims')}" : 'server')
+    if (withoutMod) {
+        def modJar = tasks.named('jar').flatMap { it.archiveFile }
+        doFirst {
+            def without = classpath.filter { it != modJar.get().asFile }
+            if (without.files.size() == classpath.files.size()) throw new GradleException('The mod jar is not on the server class path any more: check -PwithoutMod')
+            classpath = without
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// A land-claim mod in our own test game and server, to check that the Screen Builder asks it (see LandClaims):
+//   gradlew -p legacy runClient -Pclaims=ftbu   FTB Utilities with FTB Library, as most 1.12.2 modpacks have
+//   tools\server.cmd forge-ftbu 1.12.2          the same on the test server, in its own folder (server-ftbu)
+// Only then, and never in the mod's jar. From CurseForge (through cursemaven), deobfuscated for the dev game.
+def claims = findProperty('claims')
+if (claims != null) {
+    if (claims != 'ftbu') throw new GradleException("-Pclaims=ftbu, not '$claims'")
+    repositories {
+        exclusiveContent {
+            forRepository { maven { name = 'CurseMaven'; url = 'https://cursemaven.com' } }
+            filter { includeGroup('curse.maven') }
+        }
+    }
+    dependencies {
+        runtimeOnly rfg.deobf('curse.maven:ftblib-237167:2985811')               // FTBLib-5.4.7.2
+        runtimeOnly rfg.deobf('curse.maven:ftb-utilities-forge-237102:3157548')  // FTBUtilities-5.4.1.131
+    }
+}
+
+configurations {
+    // JNA 5, packed into our jar as jars for ClientLoader.
+    isolatedJna {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+    concentusSources {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+    // core is compiled against JNA 5 only: Minecraft's own JNA platform classes (3.4.0) would shadow its 5.x ones.
+    // The game still runs with its own (runtimeClasspath is left alone).
+    compileClasspath {
+        exclude group: 'net.java.dev.jna', module: 'platform'
+    }
+}
+
+dependencies {
+    annotationProcessor 'com.github.bsideup.jabel:jabel-javac-plugin:1.0.0'
+    // Workaround for https://github.com/bsideup/jabel/issues/174
+    annotationProcessor 'net.java.dev.jna:jna-platform:5.13.0'
+    compileOnly('com.github.bsideup.jabel:jabel-javac-plugin:1.0.0') { transitive = false }
+
+    compileOnly "net.java.dev.jna:jna:${jnaVersion}"
+    compileOnly "net.java.dev.jna:jna-platform:${jnaVersion}"
+    isolatedJna "net.java.dev.jna:jna:${jnaVersion}"
+    isolatedJna "net.java.dev.jna:jna-platform:${jnaVersion}"
+    concentusSources 'io.github.jaredmdobson:concentus:1.0.2:sources'
+}
+
+// core's sources are compiled straight into this jar, as in the main build. Concentus (Opus in Java) is renamed
+// into our own package the same way as there (../core/build.gradle), into this build's folder.
+def relocateConcentus = tasks.register('relocateConcentus', Sync) {
+    from({ zipTree(configurations.concentusSources.singleFile) }) {
+        include 'io/github/jaredmdobson/concentus/*.java'
+        eachFile { it.path = it.path.replace('io/github/jaredmdobson/concentus/', 'com/desktopscreens/lib/concentus/') }
+        filter { line -> line.replace('io.github.jaredmdobson.concentus', 'com.desktopscreens.lib.concentus') }
+        filteringCharset = 'UTF-8'
+    }
+    includeEmptyDirs = false
+    into layout.buildDirectory.dir('generated/concentus')
+}
+
+sourceSets.main.java.srcDir('../core/src/main/java')
+sourceSets.main.java.srcDir(relocateConcentus)
+
+// The texts, from the main build's en_us.json: 1.12.2 reads key=value files (.lang), and names items and blocks with
+// ".name" after the key ("item.desktopscreens.tablet.name", "tile.desktopscreens.screen.name").
+def convertLang = tasks.register('convertLang') {
+    def source = file('../src/main/resources/assets/desktopscreens/lang/en_us.json')
+    def output = layout.buildDirectory.dir('generated/lang')
+    inputs.file(source)
+    outputs.dir(output)
+    doLast {
+        def texts = new groovy.json.JsonSlurper().parse(source, 'UTF-8')
+        def lines = []
+        texts.each { key, text ->
+            if (text.contains('\n')) throw new GradleException("$key: 1.12.2's .lang files can't hold a line break")
+            lines << "$key=$text"
+            if (key ==~ /item\.desktopscreens\.[a-z_]+/) lines << "${key}.name=$text"
+            if (key ==~ /block\.desktopscreens\.[a-z_]+/) lines << "tile.${key.substring('block.'.length())}.name=$text"
+        }
+        def dir = output.get().dir('assets/desktopscreens/lang').asFile
+        dir.mkdirs()
+        new File(dir, 'en_us.lang').setText(lines.join('\n') + '\n', 'UTF-8')
+    }
+}
+sourceSets.main.resources.srcDir(convertLang)
+
+processResources {
+    def expandProps = [
+            version    : project.version,
+            mod_id     : modId,
+            mod_name   : shared.mod_name,
+            mod_author : shared.mod_author,
+            description: shared.description,
+            minecraft  : minecraftVersion,
+    ]
+    inputs.properties(expandProps)
+    filesMatching('mcmod.info') {
+        expand(expandProps)
+    }
+    // The pictures and item models are the same as in the main build's resources.
+    from('../src/main/resources/assets/desktopscreens') {
+        include 'icon.png', 'textures/**', 'models/item/tablet.json', 'models/item/screen.json', 'models/item/screen_builder.json', 'models/block/**', 'blockstates/**'
+        into 'assets/desktopscreens'
+        // 1.12.2's blockstates name block models from models/block/ on ("desktopscreens:screen"); the newer versions'
+        // name them from models/ ("desktopscreens:block/screen"), which 1.12.2 looks for in models/block/block/.
+        filesMatching('blockstates/*.json') {
+            filter { line -> line.replace('"desktopscreens:block/', '"desktopscreens:') }
+        }
+    }
+    from(configurations.isolatedJna) {
+        into 'desktopscreens/lib'
+        // Without the version, so ClientLoader needn't know it.
+        rename { it.replaceAll(/-[0-9.]+\.jar$/, '.jar') }
+    }
+    from('../LICENSE') {
+        rename { "${it}_${modId}" }
+    }
+    from('../src/main/resources/LICENSE_concentus')
+}
+
+// The game's class loader must never load the client's code, core or JNA classes from our jar: they'd find the
+// game's old JNA. Only boot/ClientLoader loads them. Fails the build if a class outside those packages names one.
+def checkClientIsolation = tasks.register('checkClientIsolation') {
+    def classes = sourceSets.main.output.classesDirs
+    inputs.files(classes)
+    doLast {
+        def isolated = ['com/desktopscreens/client/', 'com/desktopscreens/core/', 'com/desktopscreens/lib/', 'com/sun/jna/']
+        def bad = []
+        classes.each { dir ->
+            if (!dir.exists()) return
+            dir.eachFileRecurse { f ->
+                if (!f.name.endsWith('.class')) return
+                def path = dir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+                if (isolated.any { path.startsWith(it) }) return
+                def text = new String(f.bytes, 'ISO-8859-1')
+                def named = isolated.findAll { text.contains(it) }
+                if (named) bad << "${path} names ${named.join(', ')}"
+            }
+        }
+        if (bad) throw new GradleException("Loaded by the game, but uses the client's code (only ClientLoader may):\n  " + bad.join('\n  '))
+    }
+}
+tasks.named('classes') { finalizedBy checkClientIsolation }
+tasks.named('jar') { dependsOn checkClientIsolation }
+
+jar {
+    manifest.attributes(
+            'Specification-Title': shared.mod_name,
+            'Specification-Vendor': shared.mod_author,
+            'Specification-Version': project.version,
+            'Implementation-Title': 'forge',
+            'Implementation-Version': project.version,
+            'Implementation-Vendor': shared.mod_author,
+            'Built-On-Minecraft': minecraftVersion,
+    )
+}

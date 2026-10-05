@@ -23,6 +23,9 @@ pluginManagement {
 plugins {
     // Builds every Minecraft version and loader from the one source tree in src/ (https://stonecutter.kikugie.dev).
     id("dev.kikugie.stonecutter") version "0.9.8"
+    // Fabric's Gradle plugin comes in two kinds: one for obfuscated Minecraft (up to 1.21.11), whose names it remaps,
+    // and one for 26.1 on, which comes with Mojang's own names. This applies the right one to each version.
+    id("dev.kikugie.loom-back-compat") version "0.4.3"
     // Downloads a matching JDK if the build machine doesn't have one.
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
@@ -40,7 +43,11 @@ stonecutter {
         fun match(version: String, vararg loaders: String) {
             for (loader in loaders) version("$version-$loader", version).buildscript("build.$loader.gradle.kts")
         }
+        match("1.20.1", "fabric", "forge")
         match("1.21.1", "fabric", "neoforge")
+        match("26.1.2", "fabric", "neoforge")
+        match("26.2", "fabric", "neoforge")
+        match("26.3", "fabric", "neoforge")
         // The version the committed code is written for.
         vcsVersion = "1.21.1-neoforge"
     }

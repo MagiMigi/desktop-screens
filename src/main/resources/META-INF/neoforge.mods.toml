@@ -11,6 +11,10 @@ authors = "${mod_author}"
 description = '''${description}'''
 logoFile = "assets/${mod_id}/icon.png"
 logoBlur = false
+# NeoForge 26.2's mods list shows a square icon in the list too (logoFile still fills the info panel there); older
+# versions ignore these.
+iconFile = "assets/${mod_id}/icon.png"
+iconBlur = false
 displayURL = "https://github.com/MagiMigi/desktop-screens"
 
 [[mixins]]

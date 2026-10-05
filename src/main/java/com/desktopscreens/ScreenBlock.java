@@ -8,7 +8,9 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+//? if >=1.20.5 && <1.21.2 {
 import net.minecraft.world.ItemInteractionResult;
+//?}
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -29,7 +31,13 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+//? if >=1.21.2 {
+/*import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.ScheduledTickAccess;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
+*///?} else {
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+//?}
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.material.MapColor;
@@ -60,9 +68,16 @@ public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, 
     public static final String NAME = "screen";
     /** The most blocks one joined screen counts, so a huge wall of them can't stall the game. */
     public static final int MAX_GROUP = 4096;
+    // 26.3 dropped block codecs.
+    //? if >=1.20.3 && <26.3 {
     public static final MapCodec<ScreenBlock> CODEC = simpleCodec(ScreenBlock::new);
+    //?}
     /** The way the picture faces. */
+    //? if >=1.21.2 {
+    /*public static final EnumProperty<Direction> FACING = HorizontalDirectionalBlock.FACING;
+    *///?} else {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
+    //?}
     /** Joined to a screen facing the same way on that side; left and right as seen from the front. */
     public static final BooleanProperty UP = BlockStateProperties.UP;
     public static final BooleanProperty DOWN = BlockStateProperties.DOWN;
@@ -94,10 +109,12 @@ public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, 
         return Properties.of().mapColor(MapColor.COLOR_BLACK).strength(1.5F).sound(SOUND);
     }
 
+    //? if >=1.20.3 && <26.3 {
     @Override
     protected MapCodec<ScreenBlock> codec() {
         return CODEC;
     }
+    //?}
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
@@ -117,9 +134,15 @@ public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, 
     }
 
     @Override
-    protected BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor level,
-                                     BlockPos pos, BlockPos neighborPos) {
+    //? if >=1.21.2 {
+    /*protected BlockState updateShape(BlockState state, LevelReader level, ScheduledTickAccess ticks, BlockPos pos, Direction direction,
+                                     BlockPos neighborPos, BlockState neighborState, RandomSource random) {
+        if (state.getValue(WATERLOGGED)) ticks.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));
+    *///?} else {
+    public BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor level,
+                                  BlockPos pos, BlockPos neighborPos) {
         if (state.getValue(WATERLOGGED)) level.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));
+    //?}
         return withNeighbors(state, level, pos);
     }
 
@@ -174,24 +197,44 @@ public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, 
     }
 
     /** Holding something, you use that (so blocks can be placed against a screen); only an empty hand switches it. */
+    //? if >=1.21.2 {
+    /*@Override
+    protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player,
+                                          InteractionHand hand, BlockHitResult hit) {
+        // Empty: on to useWithoutItem; anything else: on to the item's own use.
+        return stack.isEmpty() ? InteractionResult.TRY_WITH_EMPTY_HAND : InteractionResult.PASS;
+    }
+    *///?} else if >=1.20.5 {
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player,
                                               InteractionHand hand, BlockHitResult hit) {
         return stack.isEmpty() ? ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION : ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
     }
+    //?} else {
+    /*@Override
+    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        // The main hand only, as in later versions: an empty off hand mustn't switch it when the main hand's item passes.
+        if (hand != InteractionHand.MAIN_HAND || !player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+        return useWithoutItem(state, level, pos, player, hit);
+    }
+    *///?}
 
     /**
      * Turns the whole joined screen on for you, or off again. Someone else's stays theirs while they're online; one
      * left on by a player who's gone becomes yours (otherwise nobody could ever switch it again).
      */
+    //? if >=1.20.5 {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
+    //?} else {
+    /*private InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
+    *///?}
         if (level.isClientSide()) return InteractionResult.SUCCESS;
         if (!(level.getBlockEntity(pos) instanceof ScreenBlockEntity clicked)) return InteractionResult.PASS;
         UUID owner = clicked.owner();
         boolean mine = player.getUUID().equals(owner);
         if (owner != null && !mine && level.getServer() != null && level.getServer().getPlayerList().getPlayer(owner) != null) {
-            player.displayClientMessage(Component.translatable("desktopscreens.screen.in_use", clicked.ownerName()), true);
+            Players.overlay(player, Component.translatable("desktopscreens.screen.in_use", clicked.ownerName()));
             return InteractionResult.CONSUME;
         }
         Player newOwner = mine ? null : player;
@@ -210,7 +253,7 @@ public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, 
         }
         level.playSound(null, pos, newOwner != null ? SoundEvents.STONE_BUTTON_CLICK_ON : SoundEvents.STONE_BUTTON_CLICK_OFF,
                 SoundSource.BLOCKS, 0.3F, newOwner != null ? 0.8F : 0.7F);
-        player.displayClientMessage(Component.translatable(newOwner != null ? "desktopscreens.screen.on" : "desktopscreens.screen.off"), true);
+        Players.overlay(player, Component.translatable(newOwner != null ? "desktopscreens.screen.on" : "desktopscreens.screen.off"));
         return InteractionResult.CONSUME;
     }
 
@@ -231,7 +274,7 @@ public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, 
     }
 
     @Override
-    protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return SHAPES.get(state.getValue(FACING));
     }
 
@@ -246,22 +289,26 @@ public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, 
     }
 
     @Override
+    //? if >=1.20.5 {
     protected boolean isPathfindable(BlockState state, PathComputationType type) {
+    //?} else {
+    /*public boolean isPathfindable(BlockState state, BlockGetter level, BlockPos pos, PathComputationType type) {
+    *///?}
         return false;
     }
 
     @Override
-    protected FluidState getFluidState(BlockState state) {
+    public FluidState getFluidState(BlockState state) {
         return state.getValue(WATERLOGGED) ? Fluids.WATER.getSource(false) : super.getFluidState(state);
     }
 
     @Override
-    protected BlockState rotate(BlockState state, Rotation rotation) {
+    public BlockState rotate(BlockState state, Rotation rotation) {
         return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
     }
 
     @Override
-    protected BlockState mirror(BlockState state, Mirror mirror) {
+    public BlockState mirror(BlockState state, Mirror mirror) {
         BlockState turned = state.rotate(mirror.getRotation(state.getValue(FACING)));
         // A mirror image swaps the neighbors on the left and the right.
         return mirror == Mirror.NONE ? turned
