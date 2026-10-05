@@ -38,8 +38,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * what each watched screen shows (its own monitor or window, or the tablet's), scaled down to the server's limit
  * (1280x720 by default) and compressed, only while someone has the screen in sight. Screens showing the same thing
  * share one stream; each stream has its own capture reader and encoder, and a window is read from its own capture
- * (Windows Graphics Capture), so friends see it right while other windows cover it. A stream's next picture goes once
- * the server has its last one, at most as many a second as the server allows, and never one that didn't change.
+ * (Windows Graphics Capture), so friends see it right while other windows cover it. A stream has at most
+ * {@code ShareStream.IN_FLIGHT} pictures on the way to the server, at most as many a second as the server allows, and never one that didn't change.
  *
  * <p>Measured on the test PC (i7-9700K, a hard 1080p test picture): stb's resize took 38 ms and its JPEG writer
  * 45 ms, too slow for 30 a second. So the scaling is a plain bilinear one in Java (10 ms for the whole picture), and

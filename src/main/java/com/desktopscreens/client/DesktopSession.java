@@ -49,7 +49,7 @@ final class DesktopSession {
     /** Where the in-place view needs the game window cut open this frame (window pixels), if it's cut ({@link #cutsHole}). */
     private int[] inPlaceHole;
     /**
-     * Just one window instead of the whole monitor (Right Ctrl + W), or null. The picture is the monitor's, cut down
+     * Just one window instead of the whole monitor (host key + W), or null. The picture is the monitor's, cut down
      * to the window, so its menus and dialogs show wherever they fall inside it.
      */
     private AppWindow window;
@@ -92,7 +92,7 @@ final class DesktopSession {
 
             /**
              * Every focus change and window move, and why (no titles). Debug only since 2026-09-25, when the window
-             * rules had settled: NeoForge still writes them to logs/debug.log.
+             * rules had settled: they show with the log level set to debug.
              */
             @Override
             public void log(String message) {

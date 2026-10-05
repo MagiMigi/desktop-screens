@@ -28,7 +28,7 @@ import net.minecraft.resources.ResourceLocation;
  * screen), smooth when small (mipmaps), and pulled a little toward the viewer so it never flickers with the black
  * glass right behind it. Only its front side: pulled like that, its back showed through the block from behind at a
  * slant (seen on 1.12.2, 2026-10-04; the quads go round counter-clockwise seen from the front). Built from the render
- * states directly, since plain Minecraft keeps {@code RenderType.create}
+ * states directly, since before 26.1 plain Minecraft keeps {@code RenderType.create}
  * to itself (NeoForge opens it up, Fabric doesn't).
  */
 //? if >=26.2 {

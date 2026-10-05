@@ -90,7 +90,6 @@ if (claims != null) {
                 runtimeOnly("io.github.llamalad7:mixinextras-forge:${prop("deps.mixinextras")}")
             }
             "opac" -> modRuntimeOnly("maven.modrinth:open-parties-and-claims:${prop("deps.opac")}")
-            "flan" -> {}
             else -> throw GradleException("-Pclaims=ftb or -Pclaims=opac, not '$claims'")
         }
     }

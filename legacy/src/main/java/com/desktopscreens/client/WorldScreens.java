@@ -223,7 +223,7 @@ final class WorldScreens {
         return on;
     }
 
-    /** A view asked for by the builder (and later sharing), not a screen: kept while asked for, but it captures nothing itself. */
+    /** A view asked for by sharing or the builder, not a screen: kept while asked for, but it captures nothing itself. */
     private static View asked(SourceChoice choice) {
         View view = view(choice);
         view.lastWanted = Math.max(view.lastWanted, System.nanoTime() - LINGER_NANOS / 2);

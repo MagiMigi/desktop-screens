@@ -17,7 +17,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * A real app window, for showing just that one instead of its whole monitor (Right Ctrl + W). Only valid while
+ * A real app window, for showing just that one instead of its whole monitor (host key + W). Only valid while
  * the window lives; {@link #key} names it across restarts by program and window class, never by its title.
  */
 public final class AppWindow {

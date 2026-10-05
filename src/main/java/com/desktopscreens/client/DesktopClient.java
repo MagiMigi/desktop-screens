@@ -30,7 +30,7 @@ import org.lwjgl.glfw.GLFW;
 //?}
 
 /**
- * Client entry point shared by both loaders. Loaders register the key mappings, call {@link #tick} every
+ * Client entry point shared by every loader. Loaders register the key mappings, call {@link #tick} every
  * client tick, and hook {@link #settingsScreen} up to their mods list.
  */
 public final class DesktopClient {

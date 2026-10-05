@@ -77,8 +77,8 @@ deps.ftb_chunks = "2101.1.22"
 ["26.1.2"]
 java = "25"
 mod.minecraft_range = "[26.1.2]"
-# Not used: from 26.1 on the jars have no pack.mcmeta (both loaders make one; a mod's resources and data now have
-# different formats, 84 and 101).
+# Read by the build scripts but ends up nowhere: from 26.1 on the jars have no pack.mcmeta (both loaders make one; a
+# mod's resources and data now have different formats, 84 and 101).
 mod.pack_format = "84"
 # Also holds this version's item definitions (assets/.../items) and its own GUI shader.
 mod.data = "26.1"
@@ -108,7 +108,7 @@ deps.ftb_chunks = "26.1.2.8"
 ["26.2"]
 java = "25"
 mod.minecraft_range = "[26.2]"
-# Not used (see 26.1.2).
+# Read but ends up nowhere (see 26.1.2).
 mod.pack_format = "84"
 # 26.1's data, and the shader 26.2 needs to unpack pictures.
 mod.data = "26.1 26.2"
@@ -138,7 +138,7 @@ deps.ftb_chunks = "26.1.2.8"
 ["26.3"]
 java = "25"
 mod.minecraft_range = "[26.3]"
-# Not used (see 26.1.2).
+# Read but ends up nowhere (see 26.1.2).
 mod.pack_format = "84"
 # Its own: loot tables and advancements changed format, and shaders their syntax.
 mod.data = "26.3"

@@ -10,7 +10,7 @@ import net.minecraft.client.renderer.ShaderInstance;
 //?}
 import net.minecraft.resources.ResourceLocation;
 
-/** Our core shaders. Each loader registers them its own way and hands the result back here. */
+/** Our core shaders. Before 26.1 each loader registers them its own way and hands the result back here. */
 public final class DesktopShaders {
     //? if >=26.1 {
     /*/^*

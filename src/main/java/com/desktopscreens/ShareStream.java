@@ -17,7 +17,7 @@ import java.util.UUID;
 
 /**
  * The messages that carry a shared screen's picture and sound: from the owner's game to the server, and from there to
- * the players watching. Each hop sends the next picture only once the last one has arrived, so a slow connection gets
+ * the players watching. Each hop has at most {@link #IN_FLIGHT} pictures on the way, so a slow connection gets
  * fewer pictures instead of a growing delay. The sound, being small, simply flows. The server side is {@link ShareRelay}.
  *
  * <p>Each screen shows its own thing (since 2026-09-26), so an owner sends a stream of pictures per thing shown on a

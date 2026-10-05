@@ -13,8 +13,8 @@ import java.util.List;
 /**
  * Where a picture of the monitor Minecraft is on shows the game itself, because the game isn't hidden from screen
  * capture ({@link DesktopConfig#hideGame}, off by default): a dark cover with a note on how to see the desktop there
- * instead, rather than the game inside itself, over and over. On 1.12.2 so far in the settings preview (screens in the
- * world and picture-in-picture come later in the port).
+ * instead, rather than the game inside itself, over and over. In the settings preview, on screens in the world and in
+ * picture-in-picture.
  */
 final class GameCover {
     private static final int GREY = 0x16, TITLE = 0xFFFFFFFF, TEXT = 0xFFB0B0B0;

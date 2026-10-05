@@ -127,7 +127,7 @@ public final class ClientSide extends Side {
             client.renderWorld(event.getPartialTicks());
         }
 
-        /** Clicks while playing: the Screen Builder takes those of use and attack while it's held. */
+        /** Clicks while playing: the Screen Builder takes use and attack while it's held, a shared screen an empty-hand use. */
         @SubscribeEvent
         public void mouse(MouseEvent event) {
             if (event.isButtonstate() && event.getButton() >= 0 && client.mouseButton(event.getButton())) event.setCanceled(true);

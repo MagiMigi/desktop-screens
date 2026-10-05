@@ -1,5 +1,5 @@
 // Plain Java with no Minecraft code: screen capture, mouse/keyboard handover and window handling.
-// Kept Java 8 compatible so 1.8.9 and 1.12.2 can share it later. The loader projects compile these
+// Kept Java 8 compatible so 1.12.2 (legacy/) shares it too. The loader projects compile these
 // sources straight into their own jars.
 plugins {
     id 'java-library'

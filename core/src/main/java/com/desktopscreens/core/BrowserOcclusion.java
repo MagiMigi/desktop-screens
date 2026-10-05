@@ -10,9 +10,9 @@ import com.sun.jna.ptr.IntByReference;
  * cover completely, to save power, which freezes a video behind the game in any capture of that monitor (seen
  * 2026-09-24 with two windowed dev clients side by side). Chromium's check (gfx::IsWindowVisibleAndFullyOpaque)
  * doesn't count click-through windows, layered windows that are less than fully opaque or have a color key, or popup
- * windows, and fullscreen Minecraft is a popup; a windowed one counts. So while the game's own monitor is captured and
- * the game is windowed, the game window is made layered with an opacity of 254 of 255: what's behind changes a pixel
- * by at most one step, which nobody can see.
+ * windows, and fullscreen Minecraft is a popup; a windowed one counts. So while a capture needs what's behind the
+ * windowed game (its monitor with the game hidden, or a single window), the game window is made layered at 254 of
+ * 255: what's behind changes a pixel by at most one step, which nobody can see.
  *
  * <p>The first version used the in-place view's color key instead, and a ring of sky turned into a hole
  * showing Chrome (a dark sky's gradient passes through exactly that near-black color).
@@ -30,7 +30,7 @@ public final class BrowserOcclusion {
 
     private BrowserOcclusion() {}
 
-    /** Every frame: {@code wanted} while the game's monitor is captured. Returns true if it changed the window's styles. */
+    /** Every frame: {@code wanted} while a capture needs what's behind the game. True if it changed the window's styles. */
     public static boolean keep(long window, boolean wanted) {
         HWND w = Win32.hwnd(window);
         if (w == null || !User32.INSTANCE.IsWindow(w)) return false;

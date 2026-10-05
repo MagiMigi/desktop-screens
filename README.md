@@ -14,14 +14,14 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 - **Screen Builder:** builds a whole screen at once, up to 32 × 32 blocks, with a hologram that follows your view. Shift-click a screen to move it, resize it or take it down.
 - **Tablet:** right-click it, or press G while it's in your inventory.
 - **Its own picture on every screen:** each screen can show a different monitor or just one window.
-- **Sharing:** add friends by name; they see your screen and hear your PC near it (never Minecraft or your voice chat).
-- **Picture-in-picture:** a window, small in a corner while you play.
+- **Sharing:** add friends by name; they see your screen and hear your PC near it (never Minecraft, nor your voice chat unless the screen shows its window).
+- **Picture-in-picture:** a window, small in a corner while you play (with a tablet in your inventory).
 
 ## Keys
 
 - **G:** use the screen you're looking at (or, with a tablet in your inventory, the desktop anywhere).
 - **Right Ctrl** (tap): back to the game. So does switching to Minecraft (Alt+Tab or its taskbar button).
-- **Right Ctrl + M:** next monitor. **+ W:** just the window under the mouse. **+ O:** settings. **+ P:** pin a window for picture-in-picture. **+ F:** framed view. **+ S:** scaling. **+ mouse wheel** (or Up/Down): zoom.
+- **Right Ctrl + M:** next monitor. **+ W:** just the window under the mouse. **+ O:** settings. **+ P:** pin a window for picture-in-picture. **+ F:** framed view. **+ S:** scaling. **+ mouse wheel** (or Up/Down): zoom (these three for the desktop view of another monitor).
 
 Right Ctrl belongs to the mod while you use the desktop; use Left Ctrl for shortcuts in your apps. Every key can be changed in Controls, under "Desktop Screens".
 
@@ -64,7 +64,7 @@ Minecraft 1.12.2 comes with JNA 4, and `core/` needs JNA 5, so the 1.12.2 jar br
 |---|---|
 | `core/` | Plain Java, no Minecraft: screen capture, mouse/keyboard handover, moving windows. Java 8 compatible, so every Minecraft version can use it. |
 | `src/` | The Minecraft code. Loader-only code is in its own package (`com.desktopscreens.fabric`, `.neoforge`, `.forge`); `com.desktopscreens.net` stands in for networking classes Minecraft only has from 1.20.5 on. |
-| `src/data/` | Recipes, loot tables and tags, one folder per data format (1.20.1's differs from 1.21.1's). |
+| `src/data/` | Recipes, loot tables and tags, one folder per data format (1.20.1's differs from 1.21.1's); from 26.1 on also item definitions and shaders. |
 | `versions/` | Made by the build: one folder per Minecraft version and loader, with its jar. |
 | `legacy/` | Minecraft 1.12.2 (Forge), with a build of its own. |
 

@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * One window's own capture ({@link WindowCapture}, Windows Graphics Capture) and its texture, shared by everything that
- * shows that window apart from the desktop view: screens in the world, and later sharing and picture-in-picture.
+ * shows that window apart from the desktop view: screens in the world, sharing and picture-in-picture.
  * Unlike {@link LiveCapture} it needs no monitor captured and never hides the game from screen capture. Render thread
  * only.
  */

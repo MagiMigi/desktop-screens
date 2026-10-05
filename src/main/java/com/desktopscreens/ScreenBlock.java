@@ -62,7 +62,7 @@ import java.util.UUID;
  * outside of the whole group. It needs nothing to hold it up.
  *
  * <p>Right-clicking it with an empty hand turns the whole joined screen on or off; on, it shows the desktop of the
- * player who turned it on, only in their game ({@link ScreenBlockEntity}).
+ * player who turned it on, in their game and for those they share it with ({@link ScreenBlockEntity}).
  */
 public final class ScreenBlock extends Block implements SimpleWaterloggedBlock, EntityBlock {
     public static final String NAME = "screen";

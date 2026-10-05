@@ -75,7 +75,7 @@ final class DesktopScreen extends GuiScreen {
     private GuiTextField hexBox;
     private final List<Widget.Swatch> swatches = new ArrayList<>();
     private int colorLabelY;
-    // The text below the buttons of the streaming page.
+    // The text below the buttons of the picture-in-picture and streaming pages.
     private List<String> pageText = Collections.emptyList();
     private int pageTextY;
 

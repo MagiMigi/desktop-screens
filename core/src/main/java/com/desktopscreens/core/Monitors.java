@@ -55,8 +55,8 @@ public final class Monitors {
     }
 
     /**
-     * The monitor to show when nothing else was chosen: the first one the game isn't on, because you
-     * can only control a monitor the game isn't covering. With one monitor, that's the game's own.
+     * The monitor to show when nothing else was chosen: the first one the game isn't on, so the game
+     * stays in sight beside it. With one monitor, that's the game's own.
      */
     public static Monitor defaultTarget(Monitor game) {
         List<Monitor> all = list();

@@ -33,7 +33,7 @@ final class DesktopSession {
     /** Only while controlling the game's own monitor. */
     private ClickThrough clickThrough;
     /**
-     * Just one window instead of the whole monitor (Right Ctrl + W), or null. The picture is the monitor's, cut down
+     * Just one window instead of the whole monitor (host key + W), or null. The picture is the monitor's, cut down
      * to the window, so its menus and dialogs show wherever they fall inside it.
      */
     private AppWindow window;

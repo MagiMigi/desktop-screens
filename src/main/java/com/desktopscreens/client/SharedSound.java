@@ -22,9 +22,9 @@ import java.util.concurrent.CompletableFuture;
  * serves the subtitle's arrow; how near the screen is comes in through the volume, set every tick.
  *
  * <p>No sound file behind it: {@link #resolve} makes up the streamed {@link Sound} itself, and the stream comes from
- * {@link #getStream} on NeoForge and {@link #getAudioStream} on Fabric. Neither exists in plain Minecraft, where this
- * is compiled first, so neither says {@code @Override}; each loader compiles these same sources against its own
- * Minecraft, where its one overrides its loader's hook.
+ * {@link #getStream} on NeoForge and Forge and {@link #getAudioStream} on Fabric. Each loader has only its own, so
+ * neither says {@code @Override}: each loader compiles these same sources against its own Minecraft, where its one
+ * overrides its loader's hook and the other is a plain method.
  */
 final class SharedSound extends AbstractTickableSoundInstance {
     static final ResourceLocation ID = DesktopScreens.id("shared_screen");
@@ -79,7 +79,7 @@ final class SharedSound extends AbstractTickableSoundInstance {
         // SharedSounds moves it and sets its volume.
     }
 
-    /** NeoForge's hook ({@code SoundInstance.getStream}). */
+    /** NeoForge's and Forge's hook ({@code SoundInstance.getStream}). */
     public CompletableFuture<AudioStream> getStream(SoundBufferLibrary buffers, Sound sound, boolean looping) {
         return CompletableFuture.completedFuture(stream);
     }

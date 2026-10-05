@@ -108,7 +108,7 @@ tasks.compileJava {
 // A land-claim mod in our own test game, to check that the Screen Builder asks it (see LandClaimsFabric):
 //   gradlew :1.21.1-fabric:runClient -Pclaims=ftb    FTB Chunks, with FTB Teams, FTB Library and Architectury
 //   gradlew :1.21.1-fabric:runClient -Pclaims=opac   Open Parties and Claims, with Forge Config API Port
-//   gradlew :1.21.1-fabric:runClient -Pclaims=flan   Flan (asked through the Common Protection API it brings)
+//   gradlew :1.21.1-fabric:runClient -Pclaims=flan   Flan (asked through the Common Protection API in our jar)
 // Only then, and never in the mod's jar. Loom leaves out the jars mods carry inside (it drops their "jars" list when it
 // remaps them for the test game), so those are added by hand where a mod needs one to start: without night-config,
 // Forge Config API Port crashed Open Parties and Claims at launch (2026-09-28). Flan's lingua_bib, its translations,

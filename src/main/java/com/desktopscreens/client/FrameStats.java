@@ -6,7 +6,7 @@ import java.util.Locale;
 
 /**
  * Frame timing of the desktop view or of the screens in the world, logged once per stretch of doing one thing
- * (watching a monitor, controlling it, the settings preview, showing it in the world), so smoothness problems can be
+ * (controlling a monitor, the settings preview, showing it in the world), so smoothness problems can be
  * read from the log.
  */
 final class FrameStats {

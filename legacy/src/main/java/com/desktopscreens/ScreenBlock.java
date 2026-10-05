@@ -43,7 +43,7 @@ import java.util.UUID;
  * outside of the whole group. It needs nothing to hold it up.
  *
  * <p>Right-clicking it with an empty hand turns the whole joined screen on or off; on, it shows the desktop of the
- * player who turned it on, only in their game ({@link ScreenBlockEntity}).
+ * player who turned it on, in their game and for those they share it with ({@link ScreenBlockEntity}).
  *
  * <p>On 1.12.2 only the facing is stored (a block has 16 values); which sides join is worked out from the neighbors
  * when it's drawn ({@link #getActualState}), as fences do. 1.12.2 has no waterlogging.

@@ -28,8 +28,8 @@ import java.util.function.Supplier;
 
 /**
  * What a screen block remembers: who turned it on, if anyone. A joined screen is switched as a whole, so all its
- * blocks hold the same owner. Only the owner's game shows a picture on it (their own desktop); to everyone else it
- * stays dark. Also what the client draws the picture from (the renderer is per block entity).
+ * blocks hold the same owner. Its picture (the owner's desktop) shows only in the owner's game and those of the
+ * players it's shared with; to everyone else it stays dark. The client's renderer draws from it (one per block).
  */
 public final class ScreenBlockEntity extends BlockEntity {
     /** Set by each loader when it registers the type, before any screen exists. */

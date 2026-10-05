@@ -13,7 +13,7 @@ import java.util.function.BooleanSupplier;
 
 /**
  * Lets the client tell whether the server it plays on has this mod. The server registers this payload (it's never
- * sent), and both loaders tell the client which payloads the server accepts. On a server without the mod our items
+ * sent), and every loader tells the client which payloads the server accepts. On a server without the mod our items
  * don't exist, and taking one from the creative menu gets the player kicked ("Failed to decode packet
  * 'serverbound/minecraft:set_creative_mode_slot'"), so the menu leaves them out there.
  */

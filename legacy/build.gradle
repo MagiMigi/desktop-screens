@@ -191,7 +191,7 @@ processResources {
     filesMatching('mcmod.info') {
         expand(expandProps)
     }
-    // The pictures and item models are the same as in the main build's resources.
+    // The icon, pictures, models and blockstates are the same as in the main build's resources.
     from('../src/main/resources/assets/desktopscreens') {
         include 'icon.png', 'textures/**', 'models/item/tablet.json', 'models/item/screen.json', 'models/item/screen_builder.json', 'models/block/**', 'blockstates/**'
         into 'assets/desktopscreens'

@@ -21,9 +21,9 @@ import java.util.Locale;
  * memory, so no pixel ever passes through Java.
  *
  * <p>It uses DXGI Desktop Duplication where it can: a new frame as soon as the screen changes, up to the
- * monitor's refresh rate, and none while nothing changes. GDI is the fallback (about 60 fps at most), also while
- * Desktop Duplication is briefly unavailable, like during a resolution change, and while it isn't allowed
- * (see {@link #setDuplicationAllowed}).
+ * monitor's refresh rate, and none while nothing changes. While it isn't allowed (a fullscreen game covers the
+ * monitor, see {@link #setDuplicationAllowed}) it uses Windows Graphics Capture of the monitor instead. GDI is the
+ * fallback (about 60 fps at most): while those are off or unavailable, and while the game shows a menu there.
  */
 public final class DesktopCapture implements AutoCloseable, PictureFeed {
     public interface FrameSink {
@@ -439,8 +439,8 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
     }
 
     /**
-     * A 32-bit top-down DIB section: GDI draws into it (the screen, or only the cursor over a duplicated
-     * frame), and its pixels sit in memory we can hand to OpenGL.
+     * A 32-bit top-down DIB section: GDI draws into it (the screen, a window's picture, the cursor's fallback), the
+     * other captures copy into it, and its pixels sit in memory we can hand to OpenGL.
      */
     static final class Frame {
         final int width, height;

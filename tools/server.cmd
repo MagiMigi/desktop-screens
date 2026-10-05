@@ -104,6 +104,8 @@ set "JAVA=java"
 if defined JAVA_HOME set "JAVA=%JAVA_HOME%\bin\java.exe"
 rem 1.12.2 runs on Java 8: the one Gradle keeps for its build.
 if "%MC%"=="1.12.2" for /d %%D in ("%USERPROFILE%\.gradle\jdks\*-8-*") do if exist "%%D\bin\java.exe" set "JAVA=%%D\bin\java.exe"
+rem 26.x runs on Java 25: the same.
+if "%MC:~0,3%"=="26." for /d %%D in ("%USERPROFILE%\.gradle\jdks\*-25-*") do if exist "%%D\bin\java.exe" set "JAVA=%%D\bin\java.exe"
 pushd "%DIR%"
 "%JAVA%" -jar "%JAR%" nogui
 popd

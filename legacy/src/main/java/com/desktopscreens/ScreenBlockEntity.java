@@ -20,8 +20,8 @@ import java.util.UUID;
 
 /**
  * What a screen block remembers: who turned it on, if anyone. A joined screen is switched as a whole, so all its
- * blocks hold the same owner. Only the owner's game shows a picture on it (their own desktop); to everyone else it
- * stays dark. Also what the client draws the picture from (the renderer is per block entity).
+ * blocks hold the same owner. Its picture (the owner's desktop) shows only in the owner's game and those of the
+ * players it's shared with; to everyone else it stays dark. The client's renderer draws from it (one per block).
  */
 public final class ScreenBlockEntity extends TileEntity {
     /**
@@ -34,7 +34,7 @@ public final class ScreenBlockEntity extends TileEntity {
 
     private UUID owner;
     private String ownerName = "";
-    /** Who else sees the owner's desktop on it (see ScreenSharing, with part D). Empty while it's off. */
+    /** Who else sees the owner's desktop on it (see ScreenSharing). Empty while it's off. */
     private List<Watcher> shared = Collections.emptyList();
     /**
      * Which screen this is, the same in all its blocks: given when it's first turned on, kept while it's off, and

@@ -20,7 +20,7 @@ import net.minecraft.world.InteractionHand;
 final class ClaimMods {
     private ClaimMods() {}
 
-    /** Patbox's Common Protection API, which Flan, GOML and others answer through; inside those mods' jars. */
+    /** Patbox's Common Protection API, which Flan, GOML and others answer through; inside our jar. */
     static final class CommonProtectionApi {
         private CommonProtectionApi() {}
 
