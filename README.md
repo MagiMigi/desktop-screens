@@ -1,14 +1,23 @@
 # Desktop Screens
 
-[![Desktop Screens: how to use it (video)](https://img.youtube.com/vi/YEvAM8XEeM4/maxresdefault.jpg)](https://www.youtube.com/watch?v=YEvAM8XEeM4)
-
-**▶ [Watch how to use it](https://www.youtube.com/watch?v=YEvAM8XEeM4)** (5 minutes)
+![A screen in a Minecraft base, playing a video](docs/main.png)
 
 Your real PC desktop, inside Minecraft. Build a screen of any size in your base, turn it on, and it shows your desktop, live. Walk up to it, press **G**, and your real mouse and keyboard work on it. Tap **Right Ctrl** and you're back in the game.
 
 **Beta.** Minecraft 1.12.2 (Forge), 1.20.1 (Forge, Fabric), and 1.21.1, 26.1.2, 26.2 and 26.3 (NeoForge, Fabric). Windows 10 (version 2004 or newer) and Windows 11. Needed on the server and in each player's game. Mac and Linux players can join and watch screens shared with them.
 
 Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](https://www.curseforge.com/minecraft/mc-mods/desktop-screens)
+
+## How to use it
+
+<a href="https://www.youtube.com/watch?v=YEvAM8XEeM4"><img src="https://img.youtube.com/vi/YEvAM8XEeM4/maxresdefault.jpg" width="560" alt="Desktop Screens: how to use it (video)"></a>
+
+**▶ [Watch the video](https://www.youtube.com/watch?v=YEvAM8XEeM4)** (5 minutes)
+
+- **Place Screens** on a wall, side by side. They join into one big screen.
+- **Turn it on:** right-click the screen with an empty hand. It now shows your desktop.
+- **Use it:** look at the screen and press **G**. Your mouse and keyboard now work on your PC.
+- **Back to the game:** tap **Right Ctrl**.
 
 ## What's in it
 
@@ -76,4 +85,4 @@ MIT, see [LICENSE](LICENSE).
 
 The jars include [Concentus](https://github.com/lostromb/concentus) (Opus in pure Java, for the shared sound) under its BSD 3-Clause license, shipped as `LICENSE_concentus`, the Fabric jars the [Common Protection API](https://github.com/Patbox/common-protection-api) (MIT), and the 1.12.2 jar [JNA](https://github.com/java-native-access/jna) 5 (Apache 2.0 or LGPL 2.1), as its own two jars with their license files.
 
-The video shows *[Big Buck Bunny](https://peach.blender.org)*, © Blender Foundation, CC BY 3.0.
+The picture and the video show *[Big Buck Bunny](https://peach.blender.org)*, © Blender Foundation, CC BY 3.0.
