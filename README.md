@@ -1,6 +1,8 @@
 # Desktop Screens
 
-![A screen in a Minecraft base, playing a video](docs/main.png)
+[![Desktop Screens: how to use it (video)](https://img.youtube.com/vi/YEvAM8XEeM4/maxresdefault.jpg)](https://www.youtube.com/watch?v=YEvAM8XEeM4)
+
+**▶ [Watch how to use it](https://www.youtube.com/watch?v=YEvAM8XEeM4)** (5 minutes)
 
 Your real PC desktop, inside Minecraft. Build a screen of any size in your base, turn it on, and it shows your desktop, live. Walk up to it, press **G**, and your real mouse and keyboard work on it. Tap **Right Ctrl** and you're back in the game.
 
@@ -10,7 +12,7 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 
 ## What's in it
 
-- **Screens:** thin panels for walls, floors and ceilings. Side by side they join into one big screen. Right-click one with an empty hand to turn it on: it shows your desktop, only to you.
+- **Screens:** thin panels for walls, floors and ceilings. Side by side they join into one big screen. Right-click one with an empty hand to turn it on: it shows your desktop to you and anyone you share it with.
 - **Screen Builder:** builds a whole screen at once, up to 32 × 32 blocks, with a hologram that follows your view. Shift-click a screen to move it, resize it or take it down.
 - **Tablet:** right-click it, or press G while it's in your inventory.
 - **Its own picture on every screen:** each screen can show a different monitor or just one window.
@@ -74,4 +76,4 @@ MIT, see [LICENSE](LICENSE).
 
 The jars include [Concentus](https://github.com/lostromb/concentus) (Opus in pure Java, for the shared sound) under its BSD 3-Clause license, shipped as `LICENSE_concentus`, the Fabric jars the [Common Protection API](https://github.com/Patbox/common-protection-api) (MIT), and the 1.12.2 jar [JNA](https://github.com/java-native-access/jna) 5 (Apache 2.0 or LGPL 2.1), as its own two jars with their license files.
 
-The picture shows *[Big Buck Bunny](https://peach.blender.org)*, © Blender Foundation, CC BY 3.0.
+The video shows *[Big Buck Bunny](https://peach.blender.org)*, © Blender Foundation, CC BY 3.0.
