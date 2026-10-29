@@ -36,6 +36,10 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 
 Right Ctrl belongs to the mod while you use the desktop; use Left Ctrl for shortcuts in your apps. Every key can be changed in Controls, under "Desktop Screens".
 
+## VR (Vivecraft)
+
+With Vivecraft 1.3 or newer (every version except 1.12.2), "Use the screen" shows your desktop on Vivecraft's floating panel. Point with the laser to move the cursor; the trigger clicks, right-click and scrolling are on the same buttons as in your inventory, Vivecraft's keyboard types into your PC, and the menu button takes you back. Put "Use the screen" on a controller button once, in SteamVR's controller settings for Minecraft (the Mod section). Seated VR uses your mouse and keyboard, as on a PC. VR support is new: please tell us what works and what doesn't.
+
 ## For servers and modpacks
 
 - Nothing to install besides the jar (and Fabric API on Fabric; Mod Menu is optional).

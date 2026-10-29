@@ -268,6 +268,12 @@ public final class DesktopClient {
         return HOST_KEY.getTranslatedKeyMessage();
     }
 
+    /** Whether a key the game got (a key code, as a screen's key events give it) is the host key as bound in Controls. */
+    static boolean isHostKey(int keyCode) {
+        InputConstants.Key key = InputConstants.getKey(HOST_KEY.saveString());
+        return key.getType() == InputConstants.Type.KEYSYM && key.getValue() == keyCode;
+    }
+
     /**
      * Where the host key is on the keyboard, for {@link com.desktopscreens.core.DesktopInput#setHostKey}: its scan code
      * as Windows (and GLFW) has it (+0x100 for extended keys). 0 means Right Ctrl: unbound, or a mouse button (the

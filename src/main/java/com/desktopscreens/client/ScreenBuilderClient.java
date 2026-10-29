@@ -759,20 +759,29 @@ public final class ScreenBuilderClient {
 
     /**
      * Holding the builder and looking at a screen, not building: the keys to take it down and to move or resize it,
-     * and which part grabbing it here would take. For a few seconds ({@link HintFade}), and all the while Shift is
-     * held. True whenever the builder is on a screen, so no other hint shows meanwhile.
+     * and which part grabbing it here would take. For a few seconds ({@link HintFade}), again whenever the part
+     * changes or you look back at the screen, and all the while Shift is held. True whenever the builder is on a
+     * screen, so no other hint shows meanwhile.
      */
     static boolean renderScreenHint(Minecraft mc, GuiGraphics g) {
         if (mode != null || mc.player == null || mc.level == null || mc.options.hideGui || mc.screen != null) return false;
         if (ScreenBuilder.builderHand(mc.player) == null) return false;
         BlockHitResult hit = screenLookedAt(mc);
         ScreenGroups.Group screen = hit == null ? null : ScreenGroups.of(mc.level, hit.getBlockPos());
-        if (screen == null) return false;
+        if (screen == null) {
+            screenFade.reset(); // a glance away and straight back shows it again (2026-10-15)
+            return false;
+        }
         List<Component> lines;
+        // Part of the fade's key: keyed by the screen alone, the Move hint faded and aiming at an edge then never
+        // showed the Resize one, so resizing went unfound in a playtest (2026-10-15).
+        String about;
         if (inUseByOther(mc, screen)) {
+            about = "in use";
             lines = List.of(Component.translatable("desktopscreens.screen.in_use", screen.ownerName(mc.level)));
         } else {
             Grip grip = grip(hit, ScreenBuilder.bounds(screen.members, screen.facing), screen.facing);
+            about = grip.across() + " " + grip.up();
             Component takeDown = DesktopClient.key(mc.options.keyShift, mc.options.keyAttack), grab = DesktopClient.key(mc.options.keyShift, mc.options.keyUse);
             Component keys = Component.translatable(grip.middle() ? "desktopscreens.builder.screen_keys_move" : "desktopscreens.builder.screen_keys_resize", takeDown, grab);
             lines = grip.middle() ? List.of(keys)
@@ -782,8 +791,9 @@ public final class ScreenBuilderClient {
         if (mc.player.isShiftKeyDown()) {
             for (int i = 0; i < lines.size(); i++) GuiDraw.centeredText(g, mc.font, lines.get(i), x, y + i * 12, 0xE0E0E0);
         } else {
-            screenFade.draw(g, mc.font, "screen " + screen.anchor() + " " + taken, lines, x, y, 0xE0E0E0);
+            screenFade.draw(g, mc.font, "screen " + screen.anchor() + " " + taken + " " + about, lines, x, y, 0xE0E0E0);
         }
+        startFade.reset(); // looking at a screen is looking away from the start hint
         return true;
     }
 
@@ -795,10 +805,17 @@ public final class ScreenBuilderClient {
         return Component.translatable("desktopscreens.builder.grip." + key);
     }
 
-    /** Holding the builder, looking at a block, not building yet: how to start, for a few seconds ({@link HintFade}). */
+    /**
+     * Holding the builder, looking at a block, not building yet: how to start, for a few seconds ({@link HintFade}),
+     * again after looking away from blocks.
+     */
     static void renderStartHint(Minecraft mc, GuiGraphics g) {
         if (mode != null || mc.player == null || mc.options.hideGui || mc.screen != null) return;
-        if (ScreenBuilder.builderHand(mc.player) == null || !(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) return;
+        if (ScreenBuilder.builderHand(mc.player) == null) return;
+        if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+            startFade.reset(); // a glance away and straight back shows it again (2026-10-15)
+            return;
+        }
         startFade.draw(g, mc.font, "start " + taken, Component.translatable("desktopscreens.builder.start", DesktopClient.key(mc.options.keyUse)),
                 g.guiWidth() / 2, g.guiHeight() / 2 + 16, 0xE0E0E0);
     }

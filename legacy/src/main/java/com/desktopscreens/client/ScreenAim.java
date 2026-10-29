@@ -33,7 +33,10 @@ final class ScreenAim {
         hint = keys = null;
         if (mc.player == null || mc.world == null || mc.currentScreen != null) return;
         ScreenGroups.Group group = screenAt(mc, mc.player.rayTrace(RANGE, 1f));
-        if (group == null) return;
+        if (group == null) {
+            fade.reset(); // a glance away and straight back shows the hint again (2026-10-15)
+            return;
+        }
         UUID owner = group.owner(mc.world);
         String kind;
         if (mc.player.getUniqueID().equals(owner)) {

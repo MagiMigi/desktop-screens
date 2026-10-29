@@ -37,4 +37,9 @@ final class HintFade {
         for (int i = 0; i < lines.size(); i++) GuiDraw.centeredText(g, font, lines.get(i), x, y + i * 12, alpha << 24 | rgb);
         return true;
     }
+
+    /** Looked away: the next {@code draw} shows the hint again at once, without the wait after a while without it. */
+    void reset() {
+        key = null;
+    }
 }

@@ -101,9 +101,13 @@ neoForge {
     runs {
         register("client") {
             client()
-            gameDirectory = runFolder.resolve("client")
             // A fixed name that reads well in screenshots (the Fabric client is "Alex"). Without it NeoForge uses "Dev".
-            programArguments.addAll("--username", "MagiMigi")
+            // A second player, in a folder of its own: gradlew :1.21.1-neoforge:runClient -Pplayer=Alex.
+            val player = findProperty("player") as String? ?: "MagiMigi"
+            gameDirectory = runFolder.resolve(if (player == "MagiMigi") "client" else "client-${player.lowercase()}")
+            programArguments.addAll("--username", player)
+            // The VR panel view without a headset, the mouse as the laser: gradlew :1.21.1-neoforge:runClient -PvrTest.
+            if (hasProperty("vrTest")) systemProperty("desktopscreens.vrPanelTest", "true")
         }
         // Start it with tools/server.cmd, which sets it up for the dev client first.
         register("server") {

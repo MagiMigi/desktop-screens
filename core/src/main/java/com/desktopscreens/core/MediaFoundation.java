@@ -49,7 +49,7 @@ final class MediaFoundation {
     static final int LOCK = 3, UNLOCK = 4, SET_CURRENT_LENGTH = 6;
     // IMFTransform
     static final int GET_OUTPUT_STREAM_INFO = 7, GET_ATTRIBUTES = 8, GET_OUTPUT_AVAILABLE_TYPE = 14, SET_INPUT_TYPE = 15,
-            SET_OUTPUT_TYPE = 16, GET_OUTPUT_CURRENT_TYPE = 18, PROCESS_MESSAGE = 23, PROCESS_INPUT = 24, PROCESS_OUTPUT = 25;
+            SET_OUTPUT_TYPE = 16, PROCESS_MESSAGE = 23, PROCESS_INPUT = 24, PROCESS_OUTPUT = 25;
     // ICodecAPI
     static final int CODEC_SET_VALUE = 9;
 

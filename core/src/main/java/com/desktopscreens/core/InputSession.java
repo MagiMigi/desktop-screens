@@ -54,7 +54,7 @@ final class InputSession {
      * Windows blinks the taskbar button of a window whose SetForegroundWindow is refused. Not proven.
      */
     private static final int SETTLE_MILLIS = 300;
-    private static final int WM_NULL = 0x0000, LLKHF_EXTENDED = 0x01;
+    private static final int WM_NULL = 0x0000, LLKHF_EXTENDED = 0x01, VK_PACKET = 0xE7;
     /** The taskbars and their thumbnails: clicks there should bring a window forward. */
     private static final Set<String> TASKBAR_CLASSES = new HashSet<String>(Arrays.asList(
             "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "TaskListThumbnailWnd"));
@@ -99,7 +99,6 @@ final class InputSession {
     private final DesktopInput.Listener listener;
     private final CountDownLatch started = new CountDownLatch(1);
     private volatile boolean active = true;
-    volatile int moved, moveFailed; // written only by the mover thread
     private volatile int threadId;
     /**
      * Moving windows and changing the focus can wait on the app involved, so they run here and never on the
@@ -197,7 +196,9 @@ final class InputSession {
         keyProc = new WinUser.LowLevelKeyboardProc() {
             @Override
             public LRESULT callback(int nCode, WinUser.WPARAM wParam, WinUser.KBDLLHOOKSTRUCT info) {
-                if (nCode >= 0 && handleKey(info.vkCode & 0xFF, isHostKey(info), wParam.intValue())) {
+                // What the VR panel sends (InjectedInput) passes untouched: it's typing for the app, never a command.
+                if (nCode >= 0 && !InjectedInput.isOurs(info.dwExtraInfo.longValue())
+                        && handleKey(info.vkCode & 0xFF, isHostKey(info), wParam.intValue())) {
                     return new LRESULT(1); // swallowed: apps never see it
                 }
                 return User32.INSTANCE.CallNextHookEx(keyHook, nCode, wParam, new LPARAM(Pointer.nativeValue(info.getPointer())));
@@ -301,8 +302,18 @@ final class InputSession {
      * program sent without a scan code (0) is judged by its virtual key instead.
      */
     private boolean isHostKey(WinUser.KBDLLHOOKSTRUCT info) {
-        if (info.scanCode == 0) return (info.vkCode & 0xFF) == hostVirtualKey;
-        return (info.scanCode | ((info.flags & LLKHF_EXTENDED) != 0 ? 0x100 : 0)) == hostScancode;
+        return isHostKey(info.vkCode, info.scanCode, info.flags, hostScancode, hostVirtualKey);
+    }
+
+    /**
+     * {@link #isHostKey(WinUser.KBDLLHOOKSTRUCT)} for a key's hook fields and the host key's scan code and virtual key.
+     * A typed character (VK_PACKET, as SendInput sends Unicode) never is: its "scan code" is the character itself, so
+     * "ĝ" would look like Right Ctrl, and "X" like F12.
+     */
+    static boolean isHostKey(int vkCode, int scanCode, int flags, int hostScancode, int hostVirtualKey) {
+        if ((vkCode & 0xFF) == VK_PACKET) return false;
+        if (scanCode == 0) return (vkCode & 0xFF) == hostVirtualKey;
+        return (scanCode | ((flags & LLKHF_EXTENDED) != 0 ? 0x100 : 0)) == hostScancode;
     }
 
     /**
@@ -559,8 +570,7 @@ final class InputSession {
                 }
                 long start = System.nanoTime();
                 String result = moveTo(w, target.work, area());
-                if (result != null) moved++;
-                else moveFailed++; // e.g. a window running as admin, which a normal program isn't allowed to move
+                // Refused e.g. for a window running as admin, which a normal program isn't allowed to move.
                 log("moving " + describe(w) + " (" + why + "): " + (result != null ? result : "Windows refused")
                         + String.format(" in %.0f ms", (System.nanoTime() - start) / 1e6));
             }

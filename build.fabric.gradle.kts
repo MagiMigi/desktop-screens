@@ -148,6 +148,8 @@ loom {
             val player = findProperty("player") as String? ?: "Alex"
             runDirectory = runFolder.resolve(if (player == "Alex") "client" else "client-${player.lowercase()}")
             programArguments.addAll("--username", player)
+            // The VR panel view without a headset, the mouse as the laser: gradlew :1.21.1-fabric:runClient -PvrTest.
+            if (hasProperty("vrTest")) property("desktopscreens.vrPanelTest", "true")
         }
         // Start it with tools/server.cmd, which sets it up for the dev client first.
         named("server") {

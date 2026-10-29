@@ -3,8 +3,10 @@ package com.desktopscreens.client;
 import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.core.AppWindow;
 import com.desktopscreens.core.DesktopInput;
+import com.desktopscreens.core.InjectedInput;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
+import com.desktopscreens.core.Win32;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.Util;
@@ -18,12 +20,16 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 //? if >=1.21.9 {
-/*import net.minecraft.client.input.KeyEvent;
+/*import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 *///?}
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Shows the desktop over the game window, in one of two modes:
@@ -83,6 +89,17 @@ public final class DesktopScreen extends Screen {
     private List<FormattedCharSequence> pageText = List.of();
     private int pageTextY;
     private CycleButton<PictureInPicture.Corner> pipCornerButton;
+    // The VR panel view (VrMode): the laser, menu buttons and Vivecraft's keyboard arrive as this screen's mouse and
+    // key events, and go on to the PC from here.
+    /** Where the laser last put the real cursor, so a laser held still doesn't pin it (a real mouse can move it too). */
+    private int[] laserAt;
+    /** Mouse buttons (0 left, 1 right, 2 middle) and keys (Windows virtual keys) pressed on the PC and not let go yet. */
+    private final boolean[] pressed = new boolean[3];
+    private final Set<Integer> keysPressed = new HashSet<>();
+    /** With the test switch: the window last clicked, which the keys typed after it go to; 0 for none. */
+    private long lastClicked;
+    /** With the test switch: where each button went down on the picture; the whole click goes once it comes up. */
+    private final int[][] testClicks = new int[3][];
 
     private DesktopScreen(DesktopSession session, Screen parent, Mode mode, ScreenGroups.Group screen) {
         super(Component.translatable("desktopscreens.settings.title"));
@@ -115,6 +132,7 @@ public final class DesktopScreen extends Screen {
             // itself just because you clicked something on another monitor.
             FocusHandOff.begin(minecraft);
             if (screen != null) {
+                DesktopScreens.LOG.info("Desktop view opened on a screen: {}", VrMode.describe());
                 //? if >=26.2 {
                 /*// The HUD's F1 switch can only be flipped there.
                 hideGuiBefore = minecraft.gui.hud.isHidden();
@@ -139,7 +157,20 @@ public final class DesktopScreen extends Screen {
      * glides in first; another one is used right where you stand, and a camera that glided in goes back.
      */
     private void enterDesktop() {
-        if (screen == null) {
+        // VR: the desktop goes on Vivecraft's panel, on any monitor, without the glide (moving the camera on its own
+        // makes people sick in a headset). Seated VR (mouse and keyboard, no controllers) only on Minecraft's own
+        // monitor, whose see-through view can't be seen in a headset; the real mouse and keyboard work it as on PC.
+        boolean panel = screen != null && (VrMode.panel() || VrMode.seatedVr() && session.isGameMonitor(session.target()));
+        session.setPanel(panel);
+        if (panel) {
+            if (gliding || atScreen) {
+                CameraGlide.stop();
+                gliding = false;
+                atScreen = false;
+            }
+            session.setInWorld(false);
+            beginDesktop();
+        } else if (screen == null) {
             beginDesktop();
         } else if (session.isGameMonitor(session.target())) {
             session.setInWorld(false);
@@ -641,15 +672,221 @@ public final class DesktopScreen extends Screen {
         return button == InputConstants.MOUSE_BUTTON_LEFT && PictureInPicture.endDrag();
     }
 
+    /** The VR panel view takes this screen's mouse and key events: they're Vivecraft's laser, buttons and keyboard. */
+    private boolean panelInput() {
+        return mode == Mode.DESKTOP && session.panel() && session.controlling();
+    }
+
+    /**
+     * The desktop point under a point of this screen, or null: off the picture, or where the game window covers the
+     * desktop while it doesn't let clicks through (input sent there would come straight back here, and again).
+     */
+    private int[] panelTarget(double x, double y) {
+        int[] p = session.desktopPoint(x, y);
+        if (p == null || !session.clickingThrough() && Win32.windowContains(GameWindow.hwnd(minecraft), p[0], p[1])) return null;
+        return p;
+    }
+
+    /** The laser moved: the real cursor follows while it's on the picture. Not with the test switch (one real mouse). */
+    private void panelMove(double x, double y) {
+        if (!panelInput() || VrMode.testing()) return;
+        int[] p = panelTarget(x, y);
+        if (p == null || Arrays.equals(p, laserAt)) return;
+        InjectedInput.moveTo(p[0], p[1]);
+        laserAt = p;
+    }
+
+    /**
+     * Minecraft's mouse button as the PC's: 0 left, 1 right, 2 middle, or -1. By Minecraft's own names, since the
+     * numbers differ: 26.3 counts as SDL does (left 1, middle 2, right 3), and so does Vivecraft for it.
+     */
+    private static int pcButton(int button) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT) return 0;
+        if (button == InputConstants.MOUSE_BUTTON_RIGHT) return 1;
+        if (button == InputConstants.MOUSE_BUTTON_MIDDLE) return 2;
+        return -1;
+    }
+
+    /** A button pressed on the panel. True if the panel took it, whether or not it reached the PC (off the picture). */
+    private boolean panelPress(double x, double y, int mcButton) {
+        if (!panelInput()) return false;
+        int[] p = panelTarget(x, y);
+        int button = pcButton(mcButton);
+        if (p == null || button < 0) return true;
+        if (VrMode.testing()) {
+            // The tester's real button is down now, and the game window holds the mouse until it comes up (GLFW
+            // captures it on Windows): anything sent meanwhile would go to the game. The click goes on release.
+            testClicks[button] = p;
+        } else {
+            InjectedInput.buttonAt(button, true, p[0], p[1]);
+            pressed[button] = true;
+            laserAt = p;
+        }
+        return true;
+    }
+
+    /** A button let go: on the PC too, if it was pressed there; where the cursor is, once the laser left the picture. */
+    private boolean panelRelease(double x, double y, int mcButton) {
+        if (!panelInput()) return false;
+        int button = pcButton(mcButton);
+        if (button < 0) return true;
+        if (VrMode.testing()) {
+            int[] p = testClicks[button];
+            testClicks[button] = null;
+            if (p != null) testClick(button, p);
+            return true;
+        }
+        if (!pressed[button]) return true;
+        pressed[button] = false;
+        int[] p = panelTarget(x, y);
+        if (p != null) InjectedInput.buttonAt(button, false, p[0], p[1]);
+        else InjectedInput.button(button, false);
+        return true;
+    }
+
+    /**
+     * With the test switch: one real mouse, the tester's, so a whole click at once, then the cursor back over the
+     * game. Holding the button instead would drag in the app as the cursor came back, or leave it held: no dragging.
+     */
+    /**
+     * Fast clicks went wrong twice (2026-10-29), as the game handles a click a frame or more after it happened: the
+     * next press could come in the same frame as this release, while the earlier click's moves were still on their way,
+     * so "where the cursor is" read the other monitor and the cursor stayed there; and a real button already down again
+     * keeps the mouse with the game window, which takes whatever is sent meanwhile. So: nothing is sent while a real
+     * button is down (that click is skipped), and each click is done, the cursor back where it was, before the next.
+     * Where it was is read now, on release, so after a drag it stays where the tester let go.
+     */
+    private void testClick(int button, int[] p) {
+        if (InjectedInput.anyButtonDown()) {
+            DesktopScreens.LOG.info("VR panel test: button {} at {},{} skipped: a mouse button is down again already", button, p[0], p[1]);
+            return;
+        }
+        int[] from = Win32.cursorPos();
+        boolean sent = InjectedInput.buttonAt(button, true, p[0], p[1]) & InjectedInput.buttonAt(button, false, p[0], p[1]);
+        AppWindow clicked = AppWindow.under(p[0], p[1]);
+        lastClicked = clicked != null ? clicked.handle() : 0;
+        backTo(from);
+        DesktopScreens.LOG.info("VR panel test: button {} clicked at {},{}{}", button, p[0], p[1], sent ? "" : ", but Windows refused it");
+    }
+
+    /** With the test switch: the cursor back where it was, once Windows has handled what was sent (see {@link #testClick}). */
+    private static void backTo(int[] from) {
+        if (from == null) return;
+        InjectedInput.moveTo(from[0], from[1]);
+        InjectedInput.waitForCursor(from[0], from[1], 100);
+    }
+
+    private boolean panelScroll(double x, double y, double amount) {
+        if (!panelInput()) return false;
+        int[] p = panelTarget(x, y);
+        if (p == null || VrMode.testing() && InjectedInput.anyButtonDown()) return true;
+        int[] from = VrMode.testing() ? Win32.cursorPos() : null;
+        InjectedInput.wheelAt(amount, p[0], p[1]);
+        backTo(from);
+        return true;
+    }
+
+    /**
+     * A key from Vivecraft's keyboard or menu buttons (Escape went back to the game already, see {@link #pageKey}).
+     * Letters and digits arrive again as characters ({@link #panelChar}), so they're sent as keys only with Ctrl or
+     * Alt held, for shortcuts.
+     */
+    private boolean panelKey(int key, boolean down) {
+        if (!panelInput()) return false;
+        if (down && DesktopClient.isHostKey(key)) { // Right Ctrl back to the game, as everywhere else
+            onClose();
+            return true;
+        }
+        int vk = PanelKeys.vk(key);
+        if (vk == 0) return true;
+        if (VrMode.testing()) {
+            // The tester's real keyboard: once a key brought the app forward, the game never hears it let go, so a
+            // key goes as a whole tap at once, and Shift, Ctrl and Alt not at all (they'd stay held on the PC).
+            if (down && !PanelKeys.isCharacter(vk) && !PanelKeys.isModifier(vk) && mayType()) {
+                InjectedInput.key(vk, true);
+                InjectedInput.key(vk, false);
+            }
+            return true;
+        }
+        if (!down) {
+            if (keysPressed.remove(vk)) InjectedInput.key(vk, false);
+            return true;
+        }
+        if (PanelKeys.isCharacter(vk) && !ctrlOrAltHeld() || !mayType()) return true;
+        keysPressed.add(vk);
+        InjectedInput.key(vk, true); // a held key's repeats too, as Windows' own
+        return true;
+    }
+
+    private boolean panelChar(int codePoint) {
+        if (!panelInput()) return false;
+        if (codePoint < 32 || ctrlOrAltHeld() || !mayType()) return true;
+        for (char c : Character.toChars(codePoint)) InjectedInput.typeChar(c);
+        return true;
+    }
+
+    private boolean ctrlOrAltHeld() {
+        for (int vk : keysPressed) {
+            if (PanelKeys.isCtrlOrAlt(vk)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Keys go to the window in front, and never back into the game, which would send them on again. With the test
+     * switch the game is in front after every click on it, so the window clicked last comes forward first.
+     */
+    private boolean mayType() {
+        if (Win32.foregroundWindow() != GameWindow.hwnd(minecraft)) return true;
+        return VrMode.testing() && lastClicked != 0 && InjectedInput.bringForward(lastClicked);
+    }
+
+    /** Lets go of everything the panel pressed on the PC, so nothing stays held after it closes. */
+    private void releasePanelInput() {
+        InjectedInput.releaseAll();
+        Arrays.fill(pressed, false);
+        Arrays.fill(testClicks, null);
+        keysPressed.clear();
+    }
+
+    @Override
+    public void mouseMoved(double mouseX, double mouseY) {
+        panelMove(mouseX, mouseY);
+        super.mouseMoved(mouseX, mouseY);
+    }
+
+    //? if >=1.20.2 {
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return panelScroll(mouseX, mouseY, scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+    //?} else {
+    /*@Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        return panelScroll(mouseX, mouseY, delta) || super.mouseScrolled(mouseX, mouseY, delta);
+    }
+    *///?}
+
     //? if >=1.21.9 {
     /*@Override
     public boolean keyPressed(KeyEvent event) {
-        return pageKey(event.key()) || super.keyPressed(event);
+        return pageKey(event.key()) || panelKey(event.key(), true) || super.keyPressed(event);
+    }
+
+    @Override
+    public boolean keyReleased(KeyEvent event) {
+        return panelKey(event.key(), false) || super.keyReleased(event);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        return panelChar(event.codepoint()) || super.charTyped(event);
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        return super.mouseClicked(event, doubleClick) || startDrag(event.x(), event.y(), event.button());
+        return panelPress(event.x(), event.y(), event.button()) || super.mouseClicked(event, doubleClick)
+                || startDrag(event.x(), event.y(), event.button());
     }
 
     @Override
@@ -659,17 +896,27 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        return endDrag(event.button()) || super.mouseReleased(event);
+        return panelRelease(event.x(), event.y(), event.button()) || endDrag(event.button()) || super.mouseReleased(event);
     }
     *///?} else {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        return pageKey(keyCode) || super.keyPressed(keyCode, scanCode, modifiers);
+        return pageKey(keyCode) || panelKey(keyCode, true) || super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        return panelKey(keyCode, false) || super.keyReleased(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        return panelChar(codePoint) || super.charTyped(codePoint, modifiers);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        return super.mouseClicked(mouseX, mouseY, button) || startDrag(mouseX, mouseY, button);
+        return panelPress(mouseX, mouseY, button) || super.mouseClicked(mouseX, mouseY, button) || startDrag(mouseX, mouseY, button);
     }
 
     @Override
@@ -679,7 +926,7 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        return endDrag(button) || super.mouseReleased(mouseX, mouseY, button);
+        return panelRelease(mouseX, mouseY, button) || endDrag(button) || super.mouseReleased(mouseX, mouseY, button);
     }
     //?}
 
@@ -695,7 +942,8 @@ public final class DesktopScreen extends Screen {
 
     /** Whether the world shows around the picture; otherwise this covers it and screens in the world can't be seen. */
     boolean showsWorld() {
-        return gliding || session.showsWorld();
+        // The VR panel floats in the world, which stays visible around it: the screens there keep showing the desktop.
+        return gliding || session.showsWorld() || session.panel();
     }
 
     @Override
@@ -800,7 +1048,17 @@ public final class DesktopScreen extends Screen {
             int alpha = fade(now, hintUntil);
             Component scaling = DesktopConfig.scaling.label();
             Component controlling = Component.translatable("desktopscreens.hint.controlling", shorten(session.sourceLabel()));
-            if (session.inWorld()) {
+            if (session.panel() && VrMode.seatedVr() && !VrMode.testing()) {
+                drawBanner(g, 8, 0xFFFFFF, alpha, controlling, hostKeys("desktopscreens.hint.keys"));
+            } else if (session.panel()) {
+                Component laser =Component.translatable("desktopscreens.hint.vr_controlling", shorten(session.sourceLabel()));
+                Component keys = Component.translatable("desktopscreens.hint.vr_keys",
+                        DesktopClient.key(Component.translatable("desktopscreens.key.vr_trigger")),
+                        DesktopClient.key(Component.translatable("desktopscreens.key.vr_menu")),
+                        DesktopClient.key(Component.translatable("desktopscreens.key.vr_keyboard")));
+                if (VrMode.testing()) drawBanner(g, 8, 0xFFFFFF, alpha, laser, keys, Component.translatable("desktopscreens.hint.vr_test"));
+                else drawBanner(g, 8, 0xFFFFFF, alpha, laser, keys);
+            } else if (session.inWorld()) {
                 drawBanner(g, 8, 0xFFFFFF, alpha, controlling, hostKeys("desktopscreens.hint.in_world_keys"));
             } else if (session.clickingThrough()) {
                 drawBanner(g, 8, 0xFFFFFF, alpha, controlling,
@@ -846,6 +1104,7 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public void onClose() {
+        releasePanelInput();
         if (leaving) return; // already gliding back out
         if (atScreen || gliding) {
             // Out of the in-place view first, then the camera glides back to the player's eyes, then this closes (tick).
@@ -862,6 +1121,7 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public void removed() {
+        releasePanelInput();
         DesktopConfig.save();
         session.close();
         FocusHandOff.end();

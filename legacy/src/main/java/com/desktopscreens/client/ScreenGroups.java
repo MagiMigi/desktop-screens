@@ -140,20 +140,10 @@ final class ScreenGroups {
             return screen != null ? screen.ownerName() : "";
         }
 
-        boolean ownedBy(World world, UUID player) {
-            return player.equals(owner(world));
-        }
-
         /** Which screen it is ({@link ScreenBlockEntity#screenId}), or null. */
         UUID screenId(World world) {
             ScreenBlockEntity screen = anchorEntity(world);
             return screen != null ? screen.screenId() : null;
-        }
-
-        /** The players its owner shares it with. */
-        List<ScreenBlockEntity.Watcher> shared(World world) {
-            ScreenBlockEntity screen = anchorEntity(world);
-            return screen != null ? screen.shared() : Collections.emptyList();
         }
 
         /** Whether its owner shares it with {@code player} (this client's player): on its own list, or all their screens. */

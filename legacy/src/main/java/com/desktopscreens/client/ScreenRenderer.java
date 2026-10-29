@@ -88,7 +88,6 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
         GlStateManager.doPolygonOffset(0, 0);
         GlStateManager.disablePolygonOffset();
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, lightX, lightY);
-        GlStateManager.enableCull();
         GlStateManager.enableLighting();
         GlStateManager.popMatrix();
         if (mine) WorldScreens.drew(mc, group, System.nanoTime() - start);

@@ -136,10 +136,6 @@ final class ScreenGroups {
             return screen != null ? screen.ownerName() : "";
         }
 
-        boolean ownedBy(Level level, UUID player) {
-            return player.equals(owner(level));
-        }
-
         /** Which screen it is ({@link ScreenBlockEntity#screenId}), or null. */
         UUID screenId(Level level) {
             ScreenBlockEntity screen = anchorEntity(level);

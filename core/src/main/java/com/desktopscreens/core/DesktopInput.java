@@ -127,10 +127,4 @@ public final class DesktopInput {
         if (User32.INSTANCE.GetWindowRect(game, r)) U32.I.SetCursorPos((r.left + r.right) / 2, (r.top + r.bottom) / 2);
         Win32.forceForeground(game);
     }
-
-    /** How many windows were moved onto the target monitor this session. */
-    public int windowsMoved() {
-        InputSession s = session;
-        return s == null ? 0 : s.moved;
-    }
 }

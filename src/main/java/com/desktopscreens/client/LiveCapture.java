@@ -25,6 +25,8 @@ final class LiveCapture {
     private static int nextId;
     /** How many open captures hid the game window from screen capture; it's shown again when the last one closes. */
     private static int hidingGame;
+    /** A VR panel view shows Minecraft's own monitor: hide the game, whatever "Hide the game" says (see {@link #hideForPanel}). */
+    private static boolean hiddenForPanel;
     //? if >=1.20.5 {
     private static final SystemToast.SystemToastId NOTE = new SystemToast.SystemToastId(8000L);
     //?} else {
@@ -75,10 +77,10 @@ final class LiveCapture {
      * Windows dropped it.
      */
     private void hideGameIfOnIt() {
-        if (!DesktopConfig.hideGame) {
+        if (!DesktopConfig.hideGame && !hiddenForPanel) {
             if (hidGame) {
                 hidGame = false;
-                if (--hidingGame == 0) showGame("\"Hide the game\" is off");
+                if (--hidingGame == 0) showGame("\"Hide the game\" is off, and no VR panel shows this monitor");
             }
             return;
         }
@@ -169,6 +171,15 @@ final class LiveCapture {
         checkGameWindow(gameWindow);
     }
 
+    /**
+     * While a VR panel view shows Minecraft's own monitor, the game is hidden from capture whatever the setting says:
+     * in a headset the real monitor can't be seen, so the picture must show the desktop behind the game window (and
+     * the clicks go through it). Discord and OBS lose the game meanwhile. Takes effect at the next frame.
+     */
+    static void hideForPanel(boolean hide) {
+        hiddenForPanel = hide;
+    }
+
     /** Hiding from capture is a window setting; set it again after changing the window's styles, in case that reset it. */
     static void hideGameAgain(long gameWindow) {
         if (hidingGame > 0 && !Win32.setExcludedFromCapture(gameWindow, true)) {
@@ -187,11 +198,6 @@ final class LiveCapture {
 
     Monitor monitor() {
         return monitor;
-    }
-
-    /** True for the monitor Minecraft itself is on. */
-    boolean isGameMonitor() {
-        return gameMonitor;
     }
 
     ResourceLocation location() {
@@ -274,8 +280,6 @@ final class LiveCapture {
 
     private DesktopCapture newCapture() {
         DesktopCapture c = new DesktopCapture(monitor, DesktopConfig.fastCapture, message -> DesktopScreens.LOG.info("Capture: {}", message));
-        // On the game's own monitor the real pointer is always in sight, so a captured copy would only trail behind it.
-        c.setDrawCursor(!gameMonitor);
         // Right away, before the capture thread's first frame (a GDI grab) is done and it would start Desktop Duplication.
         allowDuplication(c);
         return c;
@@ -290,6 +294,9 @@ final class LiveCapture {
      */
     private void allowDuplication(DesktopCapture c) {
         hideGameIfOnIt();
+        // On the game's own monitor the real pointer is always in sight, so a captured copy would only trail behind
+        // it. Not in a headset (a VR panel shows this monitor), where the picture is all there is.
+        c.setDrawCursor(!gameMonitor || hiddenForPanel);
         checkGameWindow(gameWindow);
         boolean fullscreenHere = mc.getWindow().isFullscreen() && Win32.overlaps(gameWindow, monitor);
         boolean covers = Win32.coversMonitor(gameWindow, monitor);
@@ -303,10 +310,6 @@ final class LiveCapture {
         DesktopScreens.LOG.info("Capture of {}: the game is {}fullscreen here and {} the monitor exactly, so {} (game window {})",
                 monitor.label(), fullscreenHere ? "" : "not ", covers ? "covers" : "doesn't cover",
                 fullscreenHere || covers ? "Graphics Capture (or GDI)" : "Desktop Duplication allowed", Win32.windowState(gameWindow));
-    }
-
-    boolean duplicating() {
-        return capture.duplicating();
     }
 
     /** How the pictures come right now: "DXGI", "Graphics Capture" or "GDI". */
@@ -323,8 +326,13 @@ final class LiveCapture {
         return capture.error();
     }
 
-    /** True while protected video (DRM) shows black in the picture, which Windows does in every screen capture. */
+    /**
+     * True while protected video (DRM) shows black in the picture, which Windows does in every screen capture. Not
+     * while this capture hid the game window from capture: Windows counts that as protected content too, every frame
+     * the game draws, so the note showed (or flickered) with no video anywhere (2026-10-29). Real protected video on
+     * this monitor goes unmentioned meanwhile.
+     */
     boolean protectedContentHidden() {
-        return capture.protectedContentHidden();
+        return !hidGame && capture.protectedContentHidden();
     }
 }

@@ -34,6 +34,16 @@ dependencies {
     compileOnly 'net.java.dev.jna:jna-platform:5.14.0'
     // Concentus: Opus in pure Java (BSD-3-Clause), for the sound of shared screens. Players on any system can decode it.
     concentusSources 'io.github.jaredmdobson:concentus:1.0.2:sources'
+    // Unit tests, for the pure parts only (sums and mappings): nothing that sends input to the PC or opens windows.
+    testImplementation platform('org.junit:junit-bom:5.10.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'net.java.dev.jna:jna:5.14.0' // only so the classes under test load; no test calls into Windows
+    testRuntimeOnly 'net.java.dev.jna:jna-platform:5.14.0'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
 
 // Concentus is compiled in under our own package, so another mod's copy of it can't clash with ours (NeoForge

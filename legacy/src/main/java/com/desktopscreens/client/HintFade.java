@@ -39,4 +39,9 @@ final class HintFade {
         GlStateManager.disableBlend();
         return true;
     }
+
+    /** Looked away: the next {@code draw} shows the hint again at once, without the wait after a while without it. */
+    void reset() {
+        key = null;
+    }
 }

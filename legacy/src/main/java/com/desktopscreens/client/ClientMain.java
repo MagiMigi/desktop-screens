@@ -2,9 +2,6 @@ package com.desktopscreens.client;
 
 import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.boot.ClientHooks;
-import com.desktopscreens.core.Monitor;
-import com.desktopscreens.core.Monitors;
-import com.desktopscreens.core.Win32;
 import com.sun.jna.Native;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
@@ -18,11 +15,6 @@ public final class ClientMain implements ClientHooks {
         DesktopScreens.LOG.info("Client part loaded apart from the game's classes, with JNA {} from {}",
                 Native.class.getPackage().getImplementationVersion(),
                 Native.class.getProtectionDomain().getCodeSource().getLocation());
-        if (Win32.SUPPORTED) {
-            long window = GameWindow.hwnd();
-            DesktopScreens.LOG.info("Game window {}: {}", Long.toHexString(window), Win32.windowState(window));
-            for (Monitor m : Monitors.list()) DesktopScreens.LOG.info("Monitor {}", m);
-        }
         DesktopClient.init();
     }
 

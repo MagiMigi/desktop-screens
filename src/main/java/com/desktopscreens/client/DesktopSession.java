@@ -6,6 +6,7 @@ import com.desktopscreens.core.ClickThrough;
 import com.desktopscreens.core.DesktopInput;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
+import com.desktopscreens.core.PanelMapping;
 import com.desktopscreens.core.Win32;
 import com.mojang.blaze3d.platform.Window;
 //? if >=26.1 {
@@ -63,6 +64,20 @@ final class DesktopSession {
      * game, you watch the screen in the world while the mouse and keyboard control its monitor.
      */
     private boolean inWorld;
+    /**
+     * The VR panel view ({@link VrMode}): the picture fills the window, which Vivecraft shows on its floating panel,
+     * and the screen turns the laser, menu buttons and keyboard into real input ({@link #desktopPoint}). On
+     * Minecraft's own monitor too: the real screen can't be seen in a headset.
+     */
+    private boolean panel;
+    /** In the panel view: the mouse and keyboard handover is on (with the test switch, the real ones stay with the game). */
+    private boolean panelControl;
+    /** In the panel view: where the last frame's picture landed, for {@link #desktopPoint}; null before the first. */
+    private PanelMapping mapping;
+    /** For the log: the protected-video warning as last shown, its changes since the last note, and when that was. */
+    private boolean protectedShown;
+    private int protectedChanges;
+    private long protectedNotedAt;
 
     private DesktopSession(Minecraft mc, long gameWindow, Monitor game, Monitor target, SourceChoice choice) {
         this.mc = mc;
@@ -228,7 +243,7 @@ final class DesktopSession {
 
     /** True while the in-place view cuts its hole into the game window ({@link #cutsHole}). */
     boolean cuttingHole() {
-        return clickThrough != null && cutsHole();
+        return clickThrough != null && !panel && cutsHole();
     }
 
     /**
@@ -261,7 +276,7 @@ final class DesktopSession {
     /** Switches to another monitor, and keeps control if the view had it. */
     void setTarget(Monitor monitor) {
         if (monitor == null || monitor.sameAs(target)) return;
-        boolean hadControl = input.isActive();
+        boolean hadControl = controlling();
         stopInput();
         stopCapturing();
         startCapturing(monitor);
@@ -274,7 +289,7 @@ final class DesktopSession {
      * place. The settings preview shows it too.
      */
     boolean framed() {
-        return DesktopConfig.framed && !inWorld && clickThrough == null && !isGameMonitor(target);
+        return DesktopConfig.framed && !inWorld && !panel && clickThrough == null && !isGameMonitor(target);
     }
 
     /**
@@ -283,7 +298,7 @@ final class DesktopSession {
      * from the title screen.
      */
     boolean showsWorld() {
-        return (inWorld || framed() || clickThrough != null && window != null) && mc.level != null;
+        return !panel && (inWorld || framed() || clickThrough != null && window != null) && mc.level != null;
     }
 
     void setInWorld(boolean inWorld) {
@@ -294,9 +309,29 @@ final class DesktopSession {
         return inWorld;
     }
 
+    void setPanel(boolean panel) {
+        this.panel = panel;
+    }
+
+    /** The VR panel view, see {@link #panel}. */
+    boolean panel() {
+        return panel;
+    }
+
+    /**
+     * In the panel view: the desktop pixel under a point of the screen (GUI units, as Minecraft gives the mouse), or
+     * null off the picture or before it was first drawn.
+     */
+    int[] desktopPoint(double guiX, double guiY) {
+        PanelMapping m = mapping;
+        if (m == null) return null;
+        double scale = mc.getWindow().getGuiScale();
+        return m.toDesktop(guiX * scale, guiY * scale);
+    }
+
     /** Zoom only works in the desktop view of other monitors: Minecraft's own is always shown in place, 1:1. */
     boolean canZoom() {
-        return !inWorld && !isGameMonitor(target);
+        return !inWorld && !panel && !isGameMonitor(target);
     }
 
     void zoomBy(int steps) {
@@ -327,8 +362,19 @@ final class DesktopSession {
      * is handled by the screen, which keeps it on across settings.
      */
     void startInput() {
-        if (input.isActive()) return;
-        if (isGameMonitor(target)) startClickThrough();
+        if (controlling()) return;
+        if (panel) {
+            // The picture must show the desktop behind the game window, and clicks there must reach it. Not with the
+            // test switch: the tester's mouse has to keep reaching the game window, where it stands in for the laser.
+            panelControl = true;
+            if (isGameMonitor(target)) {
+                LiveCapture.hideForPanel(true);
+                if (!VrMode.testing()) startClickThrough();
+            }
+            if (VrMode.testing()) return;
+        } else if (isGameMonitor(target)) {
+            startClickThrough();
+        }
         windowArea = window == null ? null : window.rectOn(target);
         input.setHostKey(DesktopClient.hostScancode()); // picked in Controls, maybe since the last time
         input.enter(target, window); // after the click-through, so the focus goes to the app behind the game window
@@ -337,21 +383,27 @@ final class DesktopSession {
     /** Gives the mouse and keyboard back to Minecraft. */
     void stopInput() {
         stopClickThrough(); // first, so the game window can be clicked again once it gets the focus back
+        if (panelControl) {
+            panelControl = false;
+            LiveCapture.hideForPanel(false);
+        }
         if (!input.isActive()) return;
         input.exit();
     }
 
-    /** True while the real mouse and keyboard control the desktop. */
+    /** True while the desktop is being used: the real mouse and keyboard control it, or the panel view's do. */
     boolean controlling() {
-        return input.isActive();
+        return input.isActive() || panelControl;
     }
 
     private void startClickThrough() {
         clickThrough = new ClickThrough(gameWindow);
-        live.setPausedForView(true); // the real screen shows through the game window now, see drawInPlace
+        // The real screen shows through the game window now (see drawInPlace); the panel view still draws the picture.
+        if (!panel) live.setPausedForView(true);
         LiveCapture.hideGameAgain(gameWindow);
         DesktopScreens.LOG.info("Clicks now go through the game window to the apps behind it ({}{})", clickThrough,
-                cutsHole() ? "; the see-through part is cut out of the window, as the color key doesn't work with Vulkan" : "");
+                panel ? "; the VR panel shows the desktop behind it"
+                        : cutsHole() ? "; the see-through part is cut out of the window, as the color key doesn't work with Vulkan" : "");
     }
 
     private void stopClickThrough() {
@@ -373,8 +425,8 @@ final class DesktopSession {
         long start = System.nanoTime();
         beginFrame(activity());
         Window mcWindow = mc.getWindow();
-        if (clickThrough != null) drawInPlace(g);
-        else drawView(g, 0, 0, mcWindow.getWidth(), mcWindow.getHeight(), zoom);
+        if (clickThrough != null && !panel) drawInPlace(g);
+        else drawView(g, 0, 0, mcWindow.getWidth(), mcWindow.getHeight(), panel ? null : zoom);
         stats.drew(System.nanoTime() - start);
     }
 
@@ -398,13 +450,14 @@ final class DesktopSession {
 
     private void beginFrame(String activity) {
         trackWindow();
-        stats.frame(activity, clickThrough != null ? FrameStats.SEE_THROUGH : live.method(),
+        stats.frame(activity, clickThrough != null && !panel ? FrameStats.SEE_THROUGH : live.method(),
                 live.averageMillis());
     }
 
     /** What the view is doing, for the frame timing in the log. */
     private String activity() {
         String oneWindow = window != null ? ", one window" : "";
+        if (panel) return "the VR panel, showing " + target.label() + (clickThrough != null ? " (click-through)" : "") + oneWindow;
         if (clickThrough != null) return "controlling the game's monitor (click-through)" + oneWindow;
         return "controlling " + target.label() + (framed() ? ", framed" : "") + oneWindow;
     }
@@ -465,6 +518,7 @@ final class DesktopSession {
                 srcH = p.srcH();
             }
         }
+        if (panel) mapping = new PanelMapping(x, y, w, h, crop[0] + srcX, crop[1] + srcY, srcW, srcH, target.x, target.y);
         float toGui = (float) (1.0 / mc.getWindow().getGuiScale());
         GuiDraw.push(g);
         GuiDraw.scale(g, toGui, toGui);
@@ -564,13 +618,14 @@ final class DesktopSession {
 
     /** The last capture error, or null while capture works or isn't needed (the real screen shows through the game). */
     String error() {
-        return clickThrough != null ? null : live.error();
+        return clickThrough != null && !panel ? null : live.error();
     }
 
     void close() {
         if (closed) return;
         closed = true;
         stats.flush();
+        if (protectedChanges > 0) noteProtected(System.nanoTime());
         stopInput();
         stopCapturing();
     }
@@ -578,12 +633,30 @@ final class DesktopSession {
     private void startCapturing(Monitor monitor) {
         target = monitor;
         live = LiveCapture.acquire(mc, monitor);
-        live.setPausedForView(clickThrough != null);
+        live.setPausedForView(clickThrough != null && !panel);
     }
 
     /** True while protected video (DRM) shows black in the picture, which Windows does in every screen capture. */
     boolean protectedContentHidden() {
-        return clickThrough == null && live.protectedContentHidden();
+        boolean hidden = (clickThrough == null || panel) && live.protectedContentHidden();
+        if (hidden != protectedShown) {
+            protectedShown = hidden;
+            protectedChanges++;
+            // It flickered with no protected video anywhere (2026-10-29): the log says when, where and with what, once
+            // now and then at most every 10 s, as it may change many times a second.
+            long now = System.nanoTime();
+            if (protectedNotedAt == 0 || now - protectedNotedAt >= 10_000_000_000L) noteProtected(now);
+        }
+        return hidden;
+    }
+
+    private void noteProtected(long now) {
+        DesktopScreens.LOG.info("Windows says protected video is blacked out in the picture of {}: {} ({} changes since the last note; "
+                        + "the game window {} on this monitor and {} from capture; {})", target.label(), protectedShown ? "yes" : "no",
+                protectedChanges, Win32.overlaps(gameWindow, target) ? "is" : "isn't",
+                Win32.excludedFromCapture(gameWindow) ? "hidden" : "not hidden", live.method());
+        protectedChanges = 0;
+        protectedNotedAt = now;
     }
 
     /** Same monitor, fresh capture: after switching between fast capture and GDI. The last frame stays up meanwhile. */

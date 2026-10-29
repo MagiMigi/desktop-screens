@@ -163,11 +163,6 @@ final class LiveCapture {
         return monitor;
     }
 
-    /** True for the monitor Minecraft itself is on. */
-    boolean isGameMonitor() {
-        return gameMonitor;
-    }
-
     DesktopTexture texture() {
         return texture;
     }
@@ -267,10 +262,6 @@ final class LiveCapture {
         DesktopScreens.LOG.info("Capture of {}: the game is {}fullscreen here and {} the monitor exactly, so {} (game window {})",
                 monitor.label(), fullscreenHere ? "" : "not ", covers ? "covers" : "doesn't cover",
                 fullscreenHere || covers ? "Graphics Capture (or GDI)" : "Desktop Duplication allowed", Win32.windowState(gameWindow));
-    }
-
-    boolean duplicating() {
-        return capture.duplicating();
     }
 
     /** How the pictures come right now: "DXGI", "Graphics Capture" or "GDI". */

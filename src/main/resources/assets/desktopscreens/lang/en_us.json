@@ -24,6 +24,9 @@
   "desktopscreens.key.mouse_right": "RMB",
   "desktopscreens.key.mouse_middle": "MMB",
   "desktopscreens.key.together": "%s + %s",
+  "desktopscreens.key.vr_trigger": "Trigger",
+  "desktopscreens.key.vr_menu": "Menu button",
+  "desktopscreens.key.vr_keyboard": "Keyboard button",
 
   "desktopscreens.builder.start": "%s Start a screen here",
   "desktopscreens.builder.look_at_block": "Look at a block to start a screen",
@@ -72,7 +75,7 @@
   "desktopscreens.builder.taken_down": "Took down a %s × %s screen",
 
   "block.desktopscreens.screen": "Screen",
-  "desktopscreens.screen.on": "Screen on: it shows your desktop, only to you",
+  "desktopscreens.screen.on": "Screen on: it shows your desktop to you and anyone you share it with",
   "desktopscreens.screen.off": "Screen off",
   "desktopscreens.screen.in_use": "This screen is in use by %s",
 
@@ -124,6 +127,9 @@
   "desktopscreens.hint.view_keys": "%s Scaling (%s)    %s View (%s)    %s Zoom",
   "desktopscreens.hint.in_place": "Minecraft is on this monitor: your clicks go through it, and you see the real screen.",
   "desktopscreens.hint.in_place_keys": "%s Back to the game    %s Settings    %s Next monitor    %s One window",
+  "desktopscreens.hint.vr_controlling": "Point at the desktop to move the cursor on %s.",
+  "desktopscreens.hint.vr_keys": "%s Click    %s Back to the game    %s Type",
+  "desktopscreens.hint.vr_test": "VR panel test: your mouse is the laser.",
   "desktopscreens.hint.one_window": "Just this window: %s    %s The whole monitor",
   "desktopscreens.hint.whole_monitor": "The whole monitor: %s",
   "desktopscreens.hint.no_window": "Point the mouse at a window, then press %s.",

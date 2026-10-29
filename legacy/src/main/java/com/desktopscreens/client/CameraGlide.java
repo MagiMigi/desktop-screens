@@ -116,9 +116,4 @@ final class CameraGlide {
         double y2 = y1 * cp - z1 * sp, z2 = y1 * sp + z1 * cp;
         GlStateManager.translate(x1, y2, z2);
     }
-
-    /** Whether the camera is away from the player's eyes (gliding, or at a screen). */
-    static boolean active() {
-        return target != null;
-    }
 }

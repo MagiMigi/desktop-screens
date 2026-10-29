@@ -669,20 +669,29 @@ final class ScreenBuilderClient {
 
     /**
      * Holding the builder and looking at a screen, not building: the keys to take it down and to move or resize it,
-     * and which part grabbing it here would take. For a few seconds ({@link HintFade}), and all the while Shift is
-     * held. True whenever the builder is on a screen, so no other hint shows meanwhile.
+     * and which part grabbing it here would take. For a few seconds ({@link HintFade}), again whenever the part
+     * changes or you look back at the screen, and all the while Shift is held. True whenever the builder is on a
+     * screen, so no other hint shows meanwhile.
      */
     static boolean renderScreenHint(Minecraft mc, int width, int height) {
         if (mode != null || mc.player == null || mc.world == null || mc.gameSettings.hideGUI || mc.currentScreen != null) return false;
         if (ScreenBuilder.builderHand(mc.player) == null) return false;
         RayTraceResult hit = screenLookedAt(mc);
         ScreenGroups.Group screen = hit == null ? null : ScreenGroups.of(mc.world, hit.getBlockPos());
-        if (screen == null) return false;
+        if (screen == null) {
+            screenFade.reset(); // a glance away and straight back shows it again (2026-10-15)
+            return false;
+        }
         List<ITextComponent> lines;
+        // Part of the fade's key: keyed by the screen alone, the Move hint faded and aiming at an edge then never
+        // showed the Resize one, so resizing went unfound in a playtest (2026-10-15).
+        String about;
         if (inUseByOther(mc, screen)) {
+            about = "in use";
             lines = Collections.singletonList(new TextComponentTranslation("desktopscreens.screen.in_use", screen.ownerName(mc.world)));
         } else {
             Grip grip = grip(hit, ScreenBuilder.bounds(screen.members, screen.facing), screen.facing);
+            about = grip.across + " " + grip.up;
             ITextComponent takeDown = DesktopClient.key(mc.gameSettings.keyBindSneak, mc.gameSettings.keyBindAttack);
             ITextComponent grab = DesktopClient.key(mc.gameSettings.keyBindSneak, mc.gameSettings.keyBindUseItem);
             ITextComponent keys = new TextComponentTranslation(grip.middle() ? "desktopscreens.builder.screen_keys_move"
@@ -699,8 +708,9 @@ final class ScreenBuilderClient {
         if (mc.player.isSneaking()) {
             for (int i = 0; i < lines.size(); i++) centered(mc.fontRenderer, lines.get(i), x, y + i * 12, 0xE0E0E0);
         } else {
-            screenFade.draw(mc.fontRenderer, "screen " + screen.anchor() + " " + taken, lines, x, y, 0xE0E0E0);
+            screenFade.draw(mc.fontRenderer, "screen " + screen.anchor() + " " + taken + " " + about, lines, x, y, 0xE0E0E0);
         }
+        startFade.reset(); // looking at a screen is looking away from the start hint
         return true;
     }
 
@@ -712,11 +722,18 @@ final class ScreenBuilderClient {
         return new TextComponentTranslation("desktopscreens.builder.grip." + key);
     }
 
-    /** Holding the builder, looking at a block, not building yet: how to start, for a few seconds ({@link HintFade}). */
+    /**
+     * Holding the builder, looking at a block, not building yet: how to start, for a few seconds ({@link HintFade}),
+     * again after looking away from blocks.
+     */
     static void renderStartHint(Minecraft mc, int width, int height) {
         if (mode != null || mc.player == null || mc.gameSettings.hideGUI || mc.currentScreen != null) return;
+        if (ScreenBuilder.builderHand(mc.player) == null) return;
         RayTraceResult hit = mc.objectMouseOver;
-        if (ScreenBuilder.builderHand(mc.player) == null || hit == null || hit.typeOfHit != RayTraceResult.Type.BLOCK) return;
+        if (hit == null || hit.typeOfHit != RayTraceResult.Type.BLOCK) {
+            startFade.reset(); // a glance away and straight back shows it again (2026-10-15)
+            return;
+        }
         startFade.draw(mc.fontRenderer, "start " + taken,
                 Collections.singletonList(new TextComponentTranslation("desktopscreens.builder.start", DesktopClient.key(mc.gameSettings.keyBindUseItem))),
                 width / 2, height / 2 + 16, 0xE0E0E0);

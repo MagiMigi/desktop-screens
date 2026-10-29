@@ -95,10 +95,6 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
         thread.start();
     }
 
-    public Monitor monitor() {
-        return monitor;
-    }
-
     /** Hands the newest frame to {@code sink} if it hasn't seen it yet. Returns whether it did. */
     public boolean consumeLatest(FrameSink sink) {
         synchronized (lock) {
@@ -126,11 +122,6 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
     /** Time to capture one frame, not counting waiting for the screen to change. */
     public double averageMillis() {
         return averageMillis;
-    }
-
-    /** True while frames come from DXGI Desktop Duplication, false while from GDI or Graphics Capture. */
-    public boolean duplicating() {
-        return duplicating;
     }
 
     /** How the frames come right now, for the log: "DXGI", "Graphics Capture" or "GDI". */
@@ -322,21 +313,20 @@ public final class DesktopCapture implements AutoCloseable, PictureFeed {
         }
     }
 
-    /** Under the fullscreen game: Graphics Capture of the monitor if it starts, else GDI (logged either way). */
+    /**
+     * Under the fullscreen game: Graphics Capture of the monitor if it starts, else GDI (logged either way). Only
+     * called while none runs and it hasn't failed before.
+     */
     private void startGraphicsCapture() {
-        stopGraphicsCapture();
-        if (!graphicsCaptureFailed) {
-            try {
-                graphicsCapture = GraphicsCapture.ofMonitor(monitor);
-                graphicsCapturing = true;
-                log.log("Capturing " + monitor.label() + " with Windows Graphics Capture: the game covers it fullscreen, which keeps interrupting Desktop Duplication");
-                return;
-            } catch (RuntimeException e) {
-                graphicsCaptureFailed = true;
-                log.log("Windows Graphics Capture couldn't start on " + monitor.label() + " (" + e.getMessage() + ")");
-            }
+        try {
+            graphicsCapture = GraphicsCapture.ofMonitor(monitor);
+            graphicsCapturing = true;
+            log.log("Capturing " + monitor.label() + " with Windows Graphics Capture: the game covers it fullscreen, which keeps interrupting Desktop Duplication");
+        } catch (RuntimeException e) {
+            graphicsCaptureFailed = true;
+            log.log("Windows Graphics Capture couldn't start on " + monitor.label() + " (" + e.getMessage() + ")");
+            log.log("Capturing " + monitor.label() + " with GDI: the game covers it fullscreen, which keeps interrupting Desktop Duplication");
         }
-        log.log("Capturing " + monitor.label() + " with GDI: the game covers it fullscreen, which keeps interrupting Desktop Duplication");
     }
 
     private void stopGraphicsCapture() {

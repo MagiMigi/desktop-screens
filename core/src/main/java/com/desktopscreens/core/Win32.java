@@ -36,7 +36,7 @@ public final class Win32 {
     static final int GA_ROOT = 2, MONITOR_DEFAULTTONEAREST = 2;
     static final int CURSOR_SHOWING = 1, DI_NORMAL = 3;
     private static final int GWL_EXSTYLE = -20, WS_EX_TOPMOST = 0x8, WS_EX_TRANSPARENT = 0x20, WS_EX_LAYERED = 0x80000;
-    private static final int MAPVK_VSC_TO_VK_EX = 3;
+    private static final int MAPVK_VSC_TO_VK_EX = 3, DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
     private Win32() {}
 
@@ -264,6 +264,20 @@ public final class Win32 {
         RECT r = new RECT();
         if (!User32.INSTANCE.GetWindowRect(hwnd(window), r)) return false;
         return r.left < m.x + m.width && r.right > m.x && r.top < m.y + m.height && r.bottom > m.y;
+    }
+
+    /**
+     * Whether a desktop point is inside the window as it shows; false if Windows won't say. Its visible frame, not
+     * GetWindowRect, which counts invisible resize borders: a maximized window reaches 8 px onto the next monitor.
+     */
+    public static boolean windowContains(long window, int x, int y) {
+        HWND hwnd = hwnd(window);
+        RECT r = new RECT();
+        if (Dwm.I.DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, r, r.size()) != 0
+                && !User32.INSTANCE.GetWindowRect(hwnd, r)) {
+            return false;
+        }
+        return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
     }
 
     /**

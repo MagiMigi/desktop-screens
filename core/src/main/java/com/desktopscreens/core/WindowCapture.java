@@ -41,7 +41,7 @@ public final class WindowCapture implements AutoCloseable, PictureFeed {
     private boolean fresh;   // guarded by lock
     private long published;  // guarded by lock
     private long frontTime;  // guarded by lock
-    private volatile boolean running = true, gone;
+    private volatile boolean running = true;
     private volatile boolean graphicsCaptureAllowed;
     /** Pictures Graphics Capture delivered (not counting the cursor drawn anew onto the last one). */
     private volatile long captured;
@@ -75,10 +75,6 @@ public final class WindowCapture implements AutoCloseable, PictureFeed {
         }, "Desktop Screens window capture");
         thread.setDaemon(true);
         thread.start();
-    }
-
-    public long window() {
-        return window;
     }
 
     /** Hands the newest picture to {@code sink} if it hasn't seen it yet. Returns whether it did. */
@@ -115,11 +111,6 @@ public final class WindowCapture implements AutoCloseable, PictureFeed {
     /** Why it doesn't work (Graphics Capture unavailable, the window can't be captured...), or null while it does. */
     public String error() {
         return error;
-    }
-
-    /** True once the window was closed. */
-    public boolean windowGone() {
-        return gone;
     }
 
     /** How many pictures Graphics Capture delivered so far; goes up only with new content, not a moved cursor. */
@@ -170,7 +161,6 @@ public final class WindowCapture implements AutoCloseable, PictureFeed {
                 if (now - aliveCheckedAt > ALIVE_CHECK_NANOS) {
                     aliveCheckedAt = now;
                     if (!User32.INSTANCE.IsWindow(Win32.hwnd(window))) {
-                        gone = true;
                         log.log("Stopped capturing " + label + ": the window was closed");
                         break;
                     }

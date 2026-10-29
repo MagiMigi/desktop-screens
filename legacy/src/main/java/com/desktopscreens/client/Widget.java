@@ -106,10 +106,6 @@ abstract class Widget extends GuiButton {
             displayString = name == null ? text : name.getFormattedText() + ": " + text;
         }
 
-        T value() {
-            return value;
-        }
-
         @Override
         void onPress() {
             List<T> list = values.get();
