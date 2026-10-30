@@ -131,7 +131,7 @@ final class PictureInPicture {
     static void toggle(Minecraft mc) {
         DesktopConfig.load();
         if (DesktopConfig.pip == null) {
-            mc.gui.setOverlayMessage(Component.translatable("desktopscreens.pip.nothing", DesktopClient.hostKey("P")), false);
+            mc.gui.setOverlayMessage(Component.translatable(DesktopClient.vr("desktopscreens.pip.nothing"), DesktopClient.hostKey("P")), false);
         } else if (!shown && !DesktopClient.hasTablet(mc)) {
             mc.gui.setOverlayMessage(Component.translatable("desktopscreens.pip.needs_tablet"), false);
         } else {

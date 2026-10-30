@@ -33,6 +33,33 @@ class PanelMappingTest {
     }
 
     @Test
+    void atFractionFromTheTopLeft() {
+        assertArrayEquals(new int[] {-1024, 176}, m.atFraction(0, 0));
+        assertArrayEquals(new int[] {-64, 716}, m.atFraction(0.5, 0.5));
+    }
+
+    @Test
+    void atFractionOutsideIsNull() {
+        assertNull(m.atFraction(1, 0.5));
+        assertNull(m.atFraction(0.5, -0.01));
+    }
+
+    @Test
+    void desktopRectToWindow() {
+        assertArrayEquals(new double[] {100, 50, 480, 270}, m.toWindowRect(-1024, 176, 960, 540), 1e-9);
+    }
+
+    @Test
+    void desktopRectIsCutToThePicture() {
+        assertArrayEquals(new double[] {100, 50, 62, 62}, m.toWindowRect(-1500, 0, 600, 300), 1e-9);
+    }
+
+    @Test
+    void desktopRectOffThePictureIsNull() {
+        assertNull(m.toWindowRect(2000, 0, 10, 10));
+    }
+
+    @Test
     void windowCrop() {
         PanelMapping window = new PanelMapping(0, 0, 800, 600, 200, 100, 800, 600, 0, 0);
         assertArrayEquals(new int[] {200, 100}, window.toDesktop(0, 0));

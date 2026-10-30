@@ -88,6 +88,11 @@ final class ScreenGroups {
             return p.getY() - origin.getY();
         }
 
+        /** The block in the screen's plane at this column and row (beyond its edges too): {@link #col} and {@link #row} undone. */
+        BlockPos at(int col, int row) {
+            return origin.relative(right, col).above(row);
+        }
+
         /**
          * Where a picture of this size goes, {left, bottom, width, height} in columns and rows: inside the outer
          * bezel, as big as fits, centered (black bars where the shape doesn't match).
@@ -106,6 +111,23 @@ final class ScreenGroups {
             double x = origin.getX() + 0.5 + (col - 0.5) * right.getStepX() - 0.375 * facing.getStepX();
             double z = origin.getZ() + 0.5 + (col - 0.5) * right.getStepZ() - 0.375 * facing.getStepZ();
             return new Vec3(x, origin.getY() + row, z);
+        }
+
+        /**
+         * Where a ray meets the plane of the glass, as {col, row} like {@link #frontPoint} takes them (beyond the screen's
+         * edges too), or null: it points away from the front, runs along the glass, or meets it farther than {@code range}.
+         */
+        double[] onGlass(Vec3 from, Vec3 dir, double range) {
+            double nx = facing.getStepX(), nz = facing.getStepZ();
+            double towards = dir.x * nx + dir.z * nz; // below 0 while it points at the front
+            if (towards > -1e-6) return null;
+            double planeX = origin.getX() + 0.5 - 0.375 * nx, planeZ = origin.getZ() + 0.5 - 0.375 * nz;
+            double t = ((planeX - from.x) * nx + (planeZ - from.z) * nz) / towards;
+            if (t <= 0 || t * dir.length() > range) return null;
+            double x = from.x + t * dir.x, y = from.y + t * dir.y, z = from.z + t * dir.z;
+            // Undoes frontPoint, as nearestPoint does.
+            double col = (x - origin.getX() - 0.5) * right.getStepX() + (z - origin.getZ() - 0.5) * right.getStepZ() + 0.5;
+            return new double[] {col, y - origin.getY()};
         }
 
         /** The point of the glass nearest to {@code p}: how far away the screen is, for its sound. */

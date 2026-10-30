@@ -45,7 +45,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
 
     /** What one block draws this frame, worked out from the world first. */
     private record Piece(ScreenGroups.Group group, BlockPos pos, BlockState state, WorldScreens.Picture picture, float[] rect,
-                         float[] cover, boolean drawsCover) {}
+                         float[] cover, boolean drawsCover, WorldBar.Frame bar) {}
 
     /** What {@code screen} shows this frame, or null; also notes whether it's the block that draws the game's cover. */
     private static Piece piece(ScreenBlockEntity screen, Object pass) {
@@ -77,7 +77,9 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
             group.coverBuffers = pass;
         }
         if (mine) WorldScreens.drew(mc, group, System.nanoTime() - start);
-        return new Piece(group, screen.getBlockPos(), state, picture, rect, cover, drawsCover);
+        // The VR command bar under the screen pointed at, from one of its blocks.
+        WorldBar.Frame bar = mine ? WorldPointing.barFrame(mc, group, screen.getBlockPos(), rect) : null;
+        return new Piece(group, screen.getBlockPos(), state, picture, rect, cover, drawsCover, bar);
     }
 
     //? if >=26.1 {
@@ -116,6 +118,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
                 GameCover.drawWorld(pose, collector, 1 - (cover[0] - col), cover[3] - row, NOTE_Z, cover[1] - cover[0], cover[3] - cover[2]);
             }
         }
+        if (p.bar() != null) WorldBar.draw(p.bar(), Minecraft.getInstance().font, pose, collector, p.group().col(p.pos()), p.group().row(p.pos()), NOTE_Z);
         pose.popPose();
     }
     *///?} else {
@@ -133,6 +136,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
             int col = p.group().col(p.pos()), row = p.group().row(p.pos());
             GameCover.drawWorld(pose, buffers, 1 - (cover[0] - col), cover[3] - row, NOTE_Z, cover[1] - cover[0], cover[3] - cover[2]);
         }
+        if (p.bar() != null) WorldBar.draw(p.bar(), Minecraft.getInstance().font, pose, buffers, p.group().col(p.pos()), p.group().row(p.pos()), NOTE_Z);
         pose.popPose();
     }
     //?}

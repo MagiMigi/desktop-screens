@@ -259,25 +259,29 @@ public final class Win32 {
         return U32.I.IsIconic(hwnd(window));
     }
 
-    /** Whether any part of the window is on the monitor. */
+    /**
+     * Whether any part of the window, as it shows ({@link #visibleFrame}), is on the monitor. With the invisible resize
+     * borders a maximized game was "on" the next monitor too, and hid from capture while that one was shown (2026-10-30).
+     */
     public static boolean overlaps(long window, Monitor m) {
-        RECT r = new RECT();
-        if (!User32.INSTANCE.GetWindowRect(hwnd(window), r)) return false;
-        return r.left < m.x + m.width && r.right > m.x && r.top < m.y + m.height && r.bottom > m.y;
+        RECT r = visibleFrame(hwnd(window));
+        return r != null && r.left < m.x + m.width && r.right > m.x && r.top < m.y + m.height && r.bottom > m.y;
+    }
+
+    /** Whether a desktop point is inside the window as it shows ({@link #visibleFrame}); false if Windows won't say. */
+    public static boolean windowContains(long window, int x, int y) {
+        RECT r = visibleFrame(hwnd(window));
+        return r != null && x >= r.left && x < r.right && y >= r.top && y < r.bottom;
     }
 
     /**
-     * Whether a desktop point is inside the window as it shows; false if Windows won't say. Its visible frame, not
-     * GetWindowRect, which counts invisible resize borders: a maximized window reaches 8 px onto the next monitor.
+     * The window's visible frame, not GetWindowRect, which counts invisible resize borders: a maximized window reaches
+     * 8 px onto the next monitor. GetWindowRect only if Windows won't give the frame; null if it won't give either.
      */
-    public static boolean windowContains(long window, int x, int y) {
-        HWND hwnd = hwnd(window);
+    private static RECT visibleFrame(HWND hwnd) {
         RECT r = new RECT();
-        if (Dwm.I.DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, r, r.size()) != 0
-                && !User32.INSTANCE.GetWindowRect(hwnd, r)) {
-            return false;
-        }
-        return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
+        if (Dwm.I.DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, r, r.size()) == 0) return r;
+        return User32.INSTANCE.GetWindowRect(hwnd, r) ? r : null;
     }
 
     /**

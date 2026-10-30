@@ -274,19 +274,17 @@ final class DesktopScreen extends GuiScreen {
 
     /**
      * Right Ctrl + P: the window under the mouse, or over the empty desktop this whole monitor, as picture-in-picture
-     * (it shows once you're back in the game); over the one it shows already, off again.
+     * (it shows once you're back in the game); over the one it shows already, off again. Without a Tablet it pins too,
+     * and says it shows once you carry one.
      */
     private void pinPicture() {
-        if (!DesktopClient.hasTablet(mc)) {
-            showFlash(new TextComponentTranslation("desktopscreens.pip.needs_tablet"));
-            return;
-        }
         AppWindow w = session.windowUnderPointer();
         Monitor on = w != null ? Monitors.of(w.handle()) : null;
         Monitor monitor = on != null ? on : session.target();
         if (PictureInPicture.pinOrHide(w, monitor)) {
-            showFlash(new TextComponentTranslation("desktopscreens.pip.on", w != null ? new TextComponentString(shorten(w.label())) : monitorLabel(monitor),
-                    DesktopClient.hostKey("P")));
+            Object what = w != null ? new TextComponentString(shorten(w.label())) : monitorLabel(monitor);
+            showFlash(DesktopClient.hasTablet(mc) ? new TextComponentTranslation("desktopscreens.pip.on", what, DesktopClient.hostKey("P"))
+                    : new TextComponentTranslation("desktopscreens.pip.pinned_no_tablet", what));
         } else {
             showFlash(new TextComponentTranslation("desktopscreens.pip.off"));
         }

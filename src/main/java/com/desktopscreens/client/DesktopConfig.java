@@ -67,6 +67,11 @@ final class DesktopConfig {
      * the config.
      */
     static boolean fullscreenStays = true;
+    /**
+     * VR with controllers: "Use the screen" points at the screen in the world itself instead of showing the desktop on
+     * Vivecraft's panel ({@link WorldPointing}). Off by default: the panel was there first and is tested more.
+     */
+    static boolean vrInWorld = false;
     static BorderStyle borderStyle = BorderStyle.SOLID;
     /** 0xRRGGBB */
     static int borderColor = 0x808080;
@@ -140,6 +145,7 @@ final class DesktopConfig {
         fastCapture = Boolean.parseBoolean(p.getProperty("fastCapture", Boolean.toString(fastCapture)).trim());
         hideGame = Boolean.parseBoolean(p.getProperty("streaming.hideGame", Boolean.toString(hideGame)).trim());
         fullscreenStays = Boolean.parseBoolean(p.getProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays)).trim());
+        vrInWorld = Boolean.parseBoolean(p.getProperty("vr.in_world", Boolean.toString(vrInWorld)).trim());
         borderStyle = enumValue(p, "border.style", borderStyle);
         borderColor = color(p.getProperty("border.color"), borderColor);
         borderThickness = intValue(p, "border.thickness", borderThickness, MIN_THICKNESS, MAX_THICKNESS);
@@ -214,6 +220,7 @@ final class DesktopConfig {
         p.setProperty("fastCapture", Boolean.toString(fastCapture));
         p.setProperty("streaming.hideGame", Boolean.toString(hideGame));
         p.setProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays));
+        p.setProperty("vr.in_world", Boolean.toString(vrInWorld));
         p.setProperty("border.style", borderStyle.name());
         p.setProperty("border.color", hex(borderColor));
         p.setProperty("border.thickness", Integer.toString(borderThickness));

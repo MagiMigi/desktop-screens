@@ -2,14 +2,14 @@ package com.desktopscreens.client;
 
 import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.core.AppWindow;
+import com.desktopscreens.core.CommandBar;
 import com.desktopscreens.core.DesktopInput;
-import com.desktopscreens.core.InjectedInput;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
-import com.desktopscreens.core.Win32;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.Util;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
@@ -26,10 +26,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 *///?}
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Shows the desktop over the game window, in one of two modes:
@@ -49,22 +46,27 @@ import java.util.Set;
  */
 public final class DesktopScreen extends Screen {
     /** How long the banner at the top shows its hints, or a short message; then it fades out over FADE_MILLIS. */
-    private static final long HINT_MILLIS = 6000, FLASH_MILLIS = 2500, FADE_MILLIS = 500;
+    static final long HINT_MILLIS = 6000, FLASH_MILLIS = 2500, FADE_MILLIS = 500;
     private static final int PANEL_WIDTH = 172, PAD = 8, PREVIEW_MARGIN = 8;
+    /** The VR command bar's strip at the bottom of the panel view: a 20-high button, 2 above and below (GUI units). */
+    static final int BAR_HEIGHT = 24;
     private static final int[] PALETTE = {
             0xFFFFFF, 0xAAAAAA, 0x808080, 0x404040, 0xFF4D4D, 0xFF9F40,
             0xFFE14D, 0x4CDB6B, 0x3FD0E0, 0x4A7BFF, 0xA45BFF, 0xFF6AD5};
 
     /**
      * SHARING is a page of the settings: whom a screen in the world is shared with (only when opened from one). PIP is
-     * another: picture-in-picture's on/off, corner and size. STREAM: whether Discord and OBS may lose the game.
+     * another: picture-in-picture's on/off, corner and size. STREAM: whether Discord and OBS may lose the game. BORDER:
+     * the border's thickness, color and rainbow speed.
      */
-    private enum Mode { DESKTOP, SETTINGS, SHARING, PIP, STREAM }
+    private enum Mode { DESKTOP, SETTINGS, SHARING, PIP, STREAM, BORDER }
 
     private final DesktopSession session;
     private final Screen parent; // where closing goes; null = back to the game
     /** The screen in the world this was opened on with G, or null (G elsewhere, the tablet, the settings). */
     private final ScreenGroups.Group screen;
+    /** The settings of a screen pointed at in VR ({@link WorldPointing}), which owns the session: closing goes back to it. */
+    private boolean pointing;
     private Mode mode;
     private boolean started;
     /** The camera is on its way into the screen or back out; nothing is drawn over the world meanwhile. */
@@ -91,15 +93,16 @@ public final class DesktopScreen extends Screen {
     private CycleButton<PictureInPicture.Corner> pipCornerButton;
     // The VR panel view (VrMode): the laser, menu buttons and Vivecraft's keyboard arrive as this screen's mouse and
     // key events, and go on to the PC from here.
-    /** Where the laser last put the real cursor, so a laser held still doesn't pin it (a real mouse can move it too). */
-    private int[] laserAt;
-    /** Mouse buttons (0 left, 1 right, 2 middle) and keys (Windows virtual keys) pressed on the PC and not let go yet. */
-    private final boolean[] pressed = new boolean[3];
-    private final Set<Integer> keysPressed = new HashSet<>();
-    /** With the test switch: the window last clicked, which the keys typed after it go to; 0 for none. */
-    private long lastClicked;
-    /** With the test switch: where each button went down on the picture; the whole click goes once it comes up. */
-    private final int[][] testClicks = new int[3][];
+    private final LaserInput laser = new LaserInput(Minecraft.getInstance());
+    /**
+     * The command bar's Picture-in-picture and One window take two clicks: after the button, the next click on the
+     * picture picks a window (or the empty desktop, the whole monitor) and never reaches the PC.
+     */
+    private enum Pick { NONE, PIP, WINDOW }
+    private Pick picking = Pick.NONE;
+    /** While picking: what the bar says, and where (GUI units). */
+    private Component pickText;
+    private int pickTextX;
 
     private DesktopScreen(DesktopSession session, Screen parent, Mode mode, ScreenGroups.Group screen) {
         super(Component.translatable("desktopscreens.settings.title"));
@@ -124,6 +127,16 @@ public final class DesktopScreen extends Screen {
         return new DesktopScreen(session, null, Mode.DESKTOP, screen);
     }
 
+    /**
+     * The settings for a screen pointed at in VR, with its session: Esc or closing goes back to pointing at it
+     * ({@link WorldPointing#resume}), not to the game, and the session stays open.
+     */
+    static DesktopScreen settingsWhilePointing(DesktopSession session, ScreenGroups.Group screen) {
+        DesktopScreen settings = new DesktopScreen(session, null, Mode.SETTINGS, screen);
+        settings.pointing = true;
+        return settings;
+    }
+
     @Override
     protected void init() {
         if (!started) { // init() runs again on every resize; only start once
@@ -131,7 +144,7 @@ public final class DesktopScreen extends Screen {
             // Covers the settings too: while any desktop view is open, the game must not minimize or pause
             // itself just because you clicked something on another monitor.
             FocusHandOff.begin(minecraft);
-            if (screen != null) {
+            if (screen != null && !pointing) {
                 DesktopScreens.LOG.info("Desktop view opened on a screen: {}", VrMode.describe());
                 //? if >=26.2 {
                 /*// The HUD's F1 switch can only be flipped there.
@@ -145,10 +158,13 @@ public final class DesktopScreen extends Screen {
             }
             if (mode == Mode.DESKTOP) enterDesktop();
         }
+        session.setBarHeight(hasBar() ? (int) Math.ceil(BAR_HEIGHT * minecraft.getWindow().getGuiScale()) : 0);
+        if (hasBar()) addBarWidgets();
         if (mode == Mode.SETTINGS) addSettingsWidgets();
         else if (mode == Mode.SHARING) sharingPage.addWidgets(this::addRenderableWidget, font, PAD, PANEL_WIDTH - 2 * PAD, height);
         else if (mode == Mode.PIP) addPipWidgets();
         else if (mode == Mode.STREAM) addStreamWidgets();
+        else if (mode == Mode.BORDER) addBorderWidgets();
     }
 
     /**
@@ -160,7 +176,8 @@ public final class DesktopScreen extends Screen {
         // VR: the desktop goes on Vivecraft's panel, on any monitor, without the glide (moving the camera on its own
         // makes people sick in a headset). Seated VR (mouse and keyboard, no controllers) only on Minecraft's own
         // monitor, whose see-through view can't be seen in a headset; the real mouse and keyboard work it as on PC.
-        boolean panel = screen != null && (VrMode.panel() || VrMode.seatedVr() && session.isGameMonitor(session.target()));
+        // The Tablet too (since 0.3.1): its PC view can't be worked with a laser.
+        boolean panel = VrMode.panel() || VrMode.seatedVr() && session.isGameMonitor(session.target());
         session.setPanel(panel);
         if (panel) {
             if (gliding || atScreen) {
@@ -198,6 +215,7 @@ public final class DesktopScreen extends Screen {
 
     private void switchTo(Mode newMode) {
         if (newMode == mode) return;
+        picking = Pick.NONE;
         // The sharing page and back doesn't change where Esc in the settings goes.
         if (newMode == Mode.DESKTOP || mode == Mode.DESKTOP) cameFromDesktop = mode == Mode.DESKTOP;
         if (newMode == Mode.SHARING && sharingPage == null) sharingPage = new SharingPage(minecraft, screen, () -> switchTo(Mode.SETTINGS));
@@ -277,18 +295,12 @@ public final class DesktopScreen extends Screen {
     /** Right Ctrl + W: just the window under the mouse, or the whole monitor again. */
     private void toggleWindow() {
         if (session.window() != null) {
-            session.setWindow(null);
-            showFlash(Component.translatable("desktopscreens.hint.whole_monitor", monitorLabel(session.target())));
-        } else {
-            AppWindow w = session.windowUnderPointer();
-            if (w == null) {
-                showFlash(Component.translatable("desktopscreens.hint.no_window", DesktopClient.hostKey("W")));
-                return;
-            }
-            session.setWindow(w);
-            showFlash(Component.translatable("desktopscreens.hint.one_window", shorten(w.label()), DesktopClient.hostKey("W")));
+            showFlash(Commands.oneWindow(session, null));
+            return;
         }
-        DesktopConfig.save();
+        AppWindow w = session.windowUnderPointer();
+        if (w == null) showFlash(Component.translatable("desktopscreens.hint.no_window", DesktopClient.hostKey("W")));
+        else showFlash(Commands.oneWindow(session, w));
     }
 
     /**
@@ -296,24 +308,11 @@ public final class DesktopScreen extends Screen {
      * (it shows once you're back in the game); over the one it shows already, off again.
      */
     private void pinPicture() {
-        if (!DesktopClient.hasTablet(minecraft)) {
-            showFlash(Component.translatable("desktopscreens.pip.needs_tablet"));
-            return;
-        }
-        AppWindow w = session.windowUnderPointer();
-        Monitor on = w != null ? Monitors.of(w.handle()) : null;
-        Monitor monitor = on != null ? on : session.target();
-        if (PictureInPicture.pinOrHide(w, monitor)) {
-            showFlash(Component.translatable("desktopscreens.pip.on", w != null ? Component.literal(shorten(w.label())) : monitorLabel(monitor),
-                    DesktopClient.hostKey("P")));
-        } else {
-            showFlash(Component.translatable("desktopscreens.pip.off"));
-        }
+        showFlash(Commands.pin(minecraft, session, session.windowUnderPointer()));
     }
 
-    /** Window titles can be long (a video's, say). */
     private static String shorten(String text) {
-        return text.length() <= 48 ? text : text.substring(0, 45) + "...";
+        return Commands.shorten(text);
     }
 
     /** "Fullscreen" for 0, otherwise "Framed, 10% margin". */
@@ -331,16 +330,12 @@ public final class DesktopScreen extends Screen {
 
     /** Moves to the next monitor and takes control of it. */
     private void cycleMonitor() {
-        List<Monitor> monitors = Monitors.list();
-        if (monitors.size() < 2) {
+        Monitor next = Commands.nextMonitor(session);
+        if (next == null) {
             showFlash(Component.translatable("desktopscreens.hint.one_monitor"));
             return;
         }
-        int index = 0;
-        for (int i = 0; i < monitors.size(); i++) {
-            if (monitors.get(i).sameAs(session.target())) index = i;
-        }
-        setMonitor(monitors.get((index + 1) % monitors.size()));
+        setMonitor(next);
         showFlash(Component.translatable("desktopscreens.hint.monitor", monitorLabel(session.target())));
         // The hint differs on Minecraft's own monitor (clicks go through the game there), so show it again after the flash.
         hintUntil = Util.getMillis() + HINT_MILLIS;
@@ -349,22 +344,16 @@ public final class DesktopScreen extends Screen {
     /** The whole of this monitor (leaving the one window, if one was shown). */
     private void setMonitor(Monitor monitor) {
         // On a screen in the world, Minecraft's own monitor is used in place and others through the screen, so stop
-        // first (or setTarget would take control of the new one straight away) and enter again the way it needs.
-        boolean reenter = screen != null && mode == Mode.DESKTOP;
+        // first (or setTarget would take control of the new one straight away) and enter again the way it needs. In
+        // seated VR the Tablet too: the panel there is for Minecraft's own monitor only.
+        boolean reenter = (screen != null || VrMode.seatedVr()) && mode == Mode.DESKTOP;
         if (reenter) session.stopInput();
-        if (session.window() != null) session.setWindow(null);
-        session.setTarget(monitor);
-        session.choice().monitor = monitor.name;
-        session.choice().changed();
-        DesktopConfig.save();
+        Commands.setMonitor(session, monitor);
         if (reenter) enterDesktop();
     }
 
-    /** The monitor Minecraft is on is marked: there your clicks go through the game window. */
     private Component monitorLabel(Monitor monitor) {
-        return session.isGameMonitor(monitor)
-                ? Component.translatable("desktopscreens.settings.monitor_game", monitor.label())
-                : Component.literal(monitor.label());
+        return Commands.monitorLabel(session, monitor);
     }
 
     /** An entry in the settings' source button: a whole monitor, or the one window shown (only while there is one). */
@@ -422,7 +411,7 @@ public final class DesktopScreen extends Screen {
                 .withInitialValue(initial)
         //?}
                 .displayOnlyValue()
-                .withTooltip(value -> Tooltip.create(Component.translatable("desktopscreens.settings.source.tooltip", DesktopClient.hostKeyName())))
+                .withTooltip(value -> Tooltip.create(Component.translatable(DesktopClient.vr("desktopscreens.settings.source.tooltip"), DesktopClient.hostKeyName())))
                 .create(x, y, w, 20, Component.translatable("desktopscreens.settings.monitor"), (button, value) -> {
                     if (value.window() == null) {
                         setMonitor(value.monitor());
@@ -464,6 +453,60 @@ public final class DesktopScreen extends Screen {
                 .bounds(x + w - streamWidth, y, streamWidth, 20)
                 .tooltip(Tooltip.create(Component.translatable("desktopscreens.settings.stream.tooltip"))).build());
         y += 22;
+        // The border's thickness, color and rainbow speed have a page of their own, so the panel fits VR's (1280x720,
+        // GUI scale 3: 240 units tall), where the VR screens row and Done fell off the bottom (Test 59, 2026-10-30).
+        int editWidth = 50;
+        addBorderStyle(x, y, w - editWidth - 2, false);
+        addRenderableWidget(Button.builder(Component.translatable("desktopscreens.settings.border_edit"), button -> switchTo(Mode.BORDER))
+                .bounds(x + w - editWidth, y, editWidth, 20)
+                .tooltip(Tooltip.create(Component.translatable("desktopscreens.settings.border_edit.tooltip"))).build());
+        y += 22;
+
+        // Picture-in-picture's page shares this row: a narrow button, so "Use the desktop" keeps room for its words.
+        int pipWidth = 50;
+        // Opened while pointing at a screen in VR: back to pointing at it (the panel would take its session over).
+        Button use = addRenderableWidget(Button.builder(Component.translatable("desktopscreens.settings.use_desktop"), button -> {
+                    if (pointing) onClose();
+                    else switchTo(Mode.DESKTOP);
+                })
+                .bounds(x, y, w - pipWidth - 2, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("desktopscreens.settings.pip"), button -> switchTo(Mode.PIP))
+                .bounds(x + w - pipWidth, y, pipWidth, 20)
+                .tooltip(Tooltip.create(Component.translatable("desktopscreens.settings.pip.tooltip"))).build());
+        // Like G: back to where the settings were opened from, or with a tablet on you (not from the mods list alone).
+        if (!cameFromDesktop && screen == null && !DesktopClient.hasTablet(minecraft)) {
+            use.active = false;
+            use.setTooltip(Tooltip.create(Component.translatable("desktopscreens.settings.use_desktop.needs_tablet")));
+        }
+        y += 22;
+        // Only where it does something: in VR with controllers, and with the test switch.
+        if (VrMode.vrActive() || VrMode.testing()) {
+            addRenderableWidget(CycleButton.booleanBuilder(Component.translatable("desktopscreens.settings.vr_screens.world"),
+                            //? if >=26.1 {
+                            /*Component.translatable("desktopscreens.settings.vr_screens.panel"), DesktopConfig.vrInWorld)
+                            *///?} else {
+                            Component.translatable("desktopscreens.settings.vr_screens.panel"))
+                    .withInitialValue(DesktopConfig.vrInWorld)
+                            //?}
+                    .withTooltip(value -> Tooltip.create(Component.translatable("desktopscreens.settings.vr_screens.tooltip")))
+                    .create(x, y, w, 20, Component.translatable("desktopscreens.settings.vr_screens"), (button, value) -> DesktopConfig.vrInWorld = value));
+            y += 22;
+        }
+        if (screen != null) {
+            // Opened from a screen in the world (yours, or G wouldn't use it): sharing it shares this row with Done.
+            int half = (w - 2) / 2;
+            Button sharing = addRenderableWidget(Button.builder(
+                    Component.translatable("desktopscreens.settings.sharing", SharingPage.count(minecraft, screen)),
+                    button -> switchTo(Mode.SHARING)).bounds(x, y, half, 20).build());
+            sharing.setTooltip(Tooltip.create(Component.translatable("desktopscreens.settings.sharing.tooltip")));
+            addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> onClose()).bounds(x + w - half, y, half, 20).build());
+        } else {
+            addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> onClose()).bounds(x, y, w, 20).build());
+        }
+    }
+
+    /** The border's style, on the settings and on its page ({@code onPage}: greys out what doesn't apply there). */
+    private void addBorderStyle(int x, int y, int w, boolean onPage) {
         //? if >=26.1 {
         /*addRenderableWidget(CycleButton.builder(BorderStyle::label, DesktopConfig.borderStyle)
                 .withValues(BorderStyle.values())
@@ -474,16 +517,19 @@ public final class DesktopScreen extends Screen {
         //?}
                 .create(x, y, w, 20, Component.translatable("desktopscreens.settings.border"), (button, value) -> {
                     DesktopConfig.borderStyle = value;
-                    updateActive();
+                    if (onPage) updateActive();
                 }));
+    }
+
+    /** The border's page: its style, thickness, color (the label with the hex box, then the swatches) and rainbow speed. */
+    private void addBorderWidgets() {
+        int x = PAD, w = PANEL_WIDTH - 2 * PAD, y = 20;
+        addBorderStyle(x, y, w, true);
         y += 22;
         thicknessSlider = addRenderableWidget(new IntSlider(x, y, w, 20, "desktopscreens.settings.thickness",
                 DesktopConfig.MIN_THICKNESS, DesktopConfig.MAX_THICKNESS, DesktopConfig.borderThickness,
                 value -> DesktopConfig.borderThickness = value));
         y += 22;
-
-        // The label, with the hex box on the same row, then the swatches in one row: the panel must still fit a
-        // maximized 1080p window at GUI scale 4 (about 254 units tall). It ends at 251 now; there's no room for another row.
         colorLabelY = y + 4;
         int hexWidth = 54;
         hexBox = addRenderableWidget(new FilteredBox(font, x + w - hexWidth + 1, y, hexWidth - 2, 16,
@@ -502,33 +548,8 @@ public final class DesktopScreen extends Screen {
         rainbowSlider = addRenderableWidget(new IntSlider(x, y, w, 20, "desktopscreens.settings.rainbow_speed",
                 DesktopConfig.MIN_RAINBOW_SECONDS, DesktopConfig.MAX_RAINBOW_SECONDS, DesktopConfig.rainbowSeconds,
                 value -> DesktopConfig.rainbowSeconds = value));
-        y += 22;
-
-        // Picture-in-picture's page shares this row: a narrow button, so "Use the desktop" keeps room for its words.
-        int pipWidth = 50;
-        Button use = addRenderableWidget(Button.builder(Component.translatable("desktopscreens.settings.use_desktop"), button -> switchTo(Mode.DESKTOP))
-                .bounds(x, y, w - pipWidth - 2, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable("desktopscreens.settings.pip"), button -> switchTo(Mode.PIP))
-                .bounds(x + w - pipWidth, y, pipWidth, 20)
-                .tooltip(Tooltip.create(Component.translatable("desktopscreens.settings.pip.tooltip"))).build());
-        // Like G: back to where the settings were opened from, or with a tablet on you (not from the mods list alone).
-        if (!cameFromDesktop && screen == null && !DesktopClient.hasTablet(minecraft)) {
-            use.active = false;
-            use.setTooltip(Tooltip.create(Component.translatable("desktopscreens.settings.use_desktop.needs_tablet")));
-        }
-        y += 22;
-        if (screen != null) {
-            // Opened from a screen in the world (yours, or G wouldn't use it): sharing it shares this row with Done.
-            int half = (w - 2) / 2;
-            Button sharing = addRenderableWidget(Button.builder(
-                    Component.translatable("desktopscreens.settings.sharing", SharingPage.count(minecraft, screen)),
-                    button -> switchTo(Mode.SHARING)).bounds(x, y, half, 20).build());
-            sharing.setTooltip(Tooltip.create(Component.translatable("desktopscreens.settings.sharing.tooltip")));
-            addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> onClose()).bounds(x + w - half, y, half, 20).build());
-        } else {
-            addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> onClose()).bounds(x, y, w, 20).build());
-        }
         updateActive();
+        addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, button -> switchTo(Mode.SETTINGS)).bounds(x, height - 24, w, 20).build());
     }
 
     /**
@@ -542,7 +563,7 @@ public final class DesktopScreen extends Screen {
                 .create(x, y, w, 20, Component.translatable("desktopscreens.pip.shown"), (button, value) -> PictureInPicture.setShown(value)));
         if (DesktopConfig.pip == null) {
             shown.active = false;
-            shown.setTooltip(Tooltip.create(Component.translatable("desktopscreens.pip.nothing", DesktopClient.hostKey("P"))));
+            shown.setTooltip(Tooltip.create(Component.translatable(DesktopClient.vr("desktopscreens.pip.nothing"), DesktopClient.hostKey("P"))));
         }
         y += 22;
         // Its choices are asked for on every click: the dragged spot joins the corners once there is one.
@@ -594,7 +615,7 @@ public final class DesktopScreen extends Screen {
                 : Component.translatable("desktopscreens.pip.key", DesktopClient.key(DesktopClient.PIP_KEY));
         List<FormattedCharSequence> lines = new ArrayList<>(font.split(what, w));
         lines.add(FormattedCharSequence.EMPTY);
-        lines.addAll(font.split(Component.translatable("desktopscreens.pip.how", DesktopClient.hostKey("P")), w));
+        lines.addAll(font.split(Component.translatable(DesktopClient.vr("desktopscreens.pip.how"), DesktopClient.hostKey("P")), w));
         lines.add(FormattedCharSequence.EMPTY);
         lines.addAll(font.split(key, w));
         pageText = lines;
@@ -646,8 +667,12 @@ public final class DesktopScreen extends Screen {
 
     /** Escape steps back a page; Enter adds the typed name on the sharing page. True if the key was used. */
     private boolean pageKey(int keyCode) {
+        if (keyCode == InputConstants.KEY_ESCAPE && mode == Mode.DESKTOP && picking != Pick.NONE) {
+            setPicking(Pick.NONE); // VR's menu button: stops picking first, a second press leaves
+            return true;
+        }
         if (keyCode == InputConstants.KEY_ESCAPE) {
-            if (mode == Mode.SHARING || mode == Mode.PIP || mode == Mode.STREAM) switchTo(Mode.SETTINGS);
+            if (mode == Mode.SHARING || mode == Mode.PIP || mode == Mode.STREAM || mode == Mode.BORDER) switchTo(Mode.SETTINGS);
             else if (mode == Mode.SETTINGS && cameFromDesktop) switchTo(Mode.DESKTOP);
             else onClose();
             return true;
@@ -672,181 +697,151 @@ public final class DesktopScreen extends Screen {
         return button == InputConstants.MOUSE_BUTTON_LEFT && PictureInPicture.endDrag();
     }
 
+    /**
+     * The VR command bar below the picture: the Right Ctrl commands as buttons, for controllers without a keyboard.
+     * Standing VR and the test switch; seated VR has a keyboard.
+     */
+    private boolean hasBar() {
+        return mode == Mode.DESKTOP && session.panel() && (VrMode.vrActive() || VrMode.testing());
+    }
+
+    /** A point (GUI units) on the command bar's strip, where clicks belong to its buttons and never reach the PC. */
+    private boolean inBar(double y) {
+        return hasBar() && y >= height - BAR_HEIGHT;
+    }
+
+    /** Minecraft's own buttons, so the laser presses them as in any menu. While picking, what to do and Cancel. */
+    private void addBarWidgets() {
+        if (picking != Pick.NONE) {
+            pickText = Component.translatable(picking == Pick.PIP ? "desktopscreens.bar.pick_pip" : "desktopscreens.bar.pick_window");
+            Component cancel = Component.translatable("desktopscreens.bar.cancel");
+            CommandBar bar = new CommandBar(new double[] {font.width(pickText), font.width(cancel) + 8}, 0, width, 8);
+            pickTextX = (int) Math.round(bar.x(0));
+            addRenderableWidget(Button.builder(cancel, button -> setPicking(Pick.NONE))
+                    .bounds((int) Math.round(bar.x(1)), height - BAR_HEIGHT + 2, (int) Math.round(bar.w(1)), 20).build());
+            return;
+        }
+        List<Component> labels = List.of(
+                Component.translatable("desktopscreens.bar.pip"),
+                Component.translatable(session.window() != null ? "desktopscreens.bar.whole_monitor" : "desktopscreens.bar.one_window"),
+                Component.translatable("desktopscreens.bar.next_monitor"),
+                Component.translatable("desktopscreens.bar.settings"),
+                Component.translatable("desktopscreens.bar.back"));
+        List<Button.OnPress> actions = List.of(
+                button -> setPicking(Pick.PIP),
+                button -> {
+                    if (session.window() == null) {
+                        setPicking(Pick.WINDOW);
+                    } else { // straight back to the whole monitor: nothing to pick
+                        showFlash(Commands.oneWindow(session, null));
+                        rebuildWidgets();
+                    }
+                },
+                button -> {
+                    cycleMonitor();
+                    rebuildWidgets(); // leaving one window for the whole next monitor changes a label
+                },
+                button -> switchTo(Mode.SETTINGS),
+                button -> onClose());
+        double[] widths = new double[labels.size()];
+        for (int i = 0; i < widths.length; i++) widths[i] = font.width(labels.get(i)) + 8;
+        CommandBar bar = new CommandBar(widths, 0, width, 4);
+        for (int i = 0; i < widths.length; i++) {
+            addRenderableWidget(Button.builder(labels.get(i), actions.get(i))
+                    .bounds((int) Math.round(bar.x(i)), height - BAR_HEIGHT + 2, (int) Math.round(bar.w(i)), 20).build());
+        }
+    }
+
+    private void setPicking(Pick pick) {
+        picking = pick;
+        rebuildWidgets();
+    }
+
+    /**
+     * A press on the picture while picking: the window there (or the empty desktop, the whole monitor) for the command.
+     * Nothing reaches the PC, not even the release (nothing was pressed there). Off the picture, it waits for another.
+     */
+    private void pick(double x, double y) {
+        int[] p = panelTarget(x, y);
+        if (p == null) return;
+        AppWindow w = AppWindow.under(p[0], p[1]);
+        showFlash(picking == Pick.PIP ? Commands.pin(minecraft, session, w) : Commands.oneWindow(session, w));
+        setPicking(Pick.NONE);
+    }
+
+    /** While picking: a frame around the window under the laser (or the mouse, with the test switch). */
+    private void drawPickOutline(GuiGraphics g, double mouseX, double mouseY) {
+        int[] p = panelTarget(mouseX, mouseY);
+        AppWindow w = p != null ? AppWindow.under(p[0], p[1]) : null;
+        int[] r = w != null ? w.rectOn(session.target()) : null; // {left, top, right, bottom}
+        double[] box = r != null ? session.guiRect(r[0], r[1], r[2] - r[0], r[3] - r[1]) : null;
+        if (box == null) return;
+        int x0 = (int) Math.floor(box[0]), y0 = (int) Math.floor(box[1]);
+        int x1 = (int) Math.ceil(box[0] + box[2]), y1 = (int) Math.ceil(box[1] + box[3]);
+        int color = 0xFFFFD866; // the hints' key color
+        g.fill(x0, y0, x1, y0 + 1, color);
+        g.fill(x0, y1 - 1, x1, y1, color);
+        g.fill(x0, y0, x0 + 1, y1, color);
+        g.fill(x1 - 1, y0, x1, y1, color);
+    }
+
     /** The VR panel view takes this screen's mouse and key events: they're Vivecraft's laser, buttons and keyboard. */
     private boolean panelInput() {
         return mode == Mode.DESKTOP && session.panel() && session.controlling();
     }
 
-    /**
-     * The desktop point under a point of this screen, or null: off the picture, or where the game window covers the
-     * desktop while it doesn't let clicks through (input sent there would come straight back here, and again).
-     */
+    /** The desktop point under a point of this screen that the laser may act on, or null (see {@link LaserInput#target}). */
     private int[] panelTarget(double x, double y) {
-        int[] p = session.desktopPoint(x, y);
-        if (p == null || !session.clickingThrough() && Win32.windowContains(GameWindow.hwnd(minecraft), p[0], p[1])) return null;
-        return p;
+        return LaserInput.target(minecraft, session.desktopPoint(x, y), session.clickingThrough());
     }
 
-    /** The laser moved: the real cursor follows while it's on the picture. Not with the test switch (one real mouse). */
     private void panelMove(double x, double y) {
-        if (!panelInput() || VrMode.testing()) return;
-        int[] p = panelTarget(x, y);
-        if (p == null || Arrays.equals(p, laserAt)) return;
-        InjectedInput.moveTo(p[0], p[1]);
-        laserAt = p;
-    }
-
-    /**
-     * Minecraft's mouse button as the PC's: 0 left, 1 right, 2 middle, or -1. By Minecraft's own names, since the
-     * numbers differ: 26.3 counts as SDL does (left 1, middle 2, right 3), and so does Vivecraft for it.
-     */
-    private static int pcButton(int button) {
-        if (button == InputConstants.MOUSE_BUTTON_LEFT) return 0;
-        if (button == InputConstants.MOUSE_BUTTON_RIGHT) return 1;
-        if (button == InputConstants.MOUSE_BUTTON_MIDDLE) return 2;
-        return -1;
+        if (panelInput()) laser.move(panelTarget(x, y));
     }
 
     /** A button pressed on the panel. True if the panel took it, whether or not it reached the PC (off the picture). */
     private boolean panelPress(double x, double y, int mcButton) {
         if (!panelInput()) return false;
-        int[] p = panelTarget(x, y);
-        int button = pcButton(mcButton);
-        if (p == null || button < 0) return true;
-        if (VrMode.testing()) {
-            // The tester's real button is down now, and the game window holds the mouse until it comes up (GLFW
-            // captures it on Windows): anything sent meanwhile would go to the game. The click goes on release.
-            testClicks[button] = p;
-        } else {
-            InjectedInput.buttonAt(button, true, p[0], p[1]);
-            pressed[button] = true;
-            laserAt = p;
-        }
-        return true;
-    }
-
-    /** A button let go: on the PC too, if it was pressed there; where the cursor is, once the laser left the picture. */
-    private boolean panelRelease(double x, double y, int mcButton) {
-        if (!panelInput()) return false;
-        int button = pcButton(mcButton);
-        if (button < 0) return true;
-        if (VrMode.testing()) {
-            int[] p = testClicks[button];
-            testClicks[button] = null;
-            if (p != null) testClick(button, p);
+        if (picking != Pick.NONE) {
+            if (LaserInput.pcButton(mcButton) == 0) pick(x, y);
             return true;
         }
-        if (!pressed[button]) return true;
-        pressed[button] = false;
-        int[] p = panelTarget(x, y);
-        if (p != null) InjectedInput.buttonAt(button, false, p[0], p[1]);
-        else InjectedInput.button(button, false);
+        laser.press(LaserInput.pcButton(mcButton), panelTarget(x, y));
         return true;
     }
 
-    /**
-     * With the test switch: one real mouse, the tester's, so a whole click at once, then the cursor back over the
-     * game. Holding the button instead would drag in the app as the cursor came back, or leave it held: no dragging.
-     */
-    /**
-     * Fast clicks went wrong twice (2026-10-29), as the game handles a click a frame or more after it happened: the
-     * next press could come in the same frame as this release, while the earlier click's moves were still on their way,
-     * so "where the cursor is" read the other monitor and the cursor stayed there; and a real button already down again
-     * keeps the mouse with the game window, which takes whatever is sent meanwhile. So: nothing is sent while a real
-     * button is down (that click is skipped), and each click is done, the cursor back where it was, before the next.
-     * Where it was is read now, on release, so after a drag it stays where the tester let go.
-     */
-    private void testClick(int button, int[] p) {
-        if (InjectedInput.anyButtonDown()) {
-            DesktopScreens.LOG.info("VR panel test: button {} at {},{} skipped: a mouse button is down again already", button, p[0], p[1]);
-            return;
-        }
-        int[] from = Win32.cursorPos();
-        boolean sent = InjectedInput.buttonAt(button, true, p[0], p[1]) & InjectedInput.buttonAt(button, false, p[0], p[1]);
-        AppWindow clicked = AppWindow.under(p[0], p[1]);
-        lastClicked = clicked != null ? clicked.handle() : 0;
-        backTo(from);
-        DesktopScreens.LOG.info("VR panel test: button {} clicked at {},{}{}", button, p[0], p[1], sent ? "" : ", but Windows refused it");
-    }
-
-    /** With the test switch: the cursor back where it was, once Windows has handled what was sent (see {@link #testClick}). */
-    private static void backTo(int[] from) {
-        if (from == null) return;
-        InjectedInput.moveTo(from[0], from[1]);
-        InjectedInput.waitForCursor(from[0], from[1], 100);
+    private boolean panelRelease(double x, double y, int mcButton) {
+        if (!panelInput()) return false;
+        laser.release(LaserInput.pcButton(mcButton), panelTarget(x, y));
+        return true;
     }
 
     private boolean panelScroll(double x, double y, double amount) {
         if (!panelInput()) return false;
-        int[] p = panelTarget(x, y);
-        if (p == null || VrMode.testing() && InjectedInput.anyButtonDown()) return true;
-        int[] from = VrMode.testing() ? Win32.cursorPos() : null;
-        InjectedInput.wheelAt(amount, p[0], p[1]);
-        backTo(from);
+        laser.scroll(amount, panelTarget(x, y));
         return true;
     }
 
-    /**
-     * A key from Vivecraft's keyboard or menu buttons (Escape went back to the game already, see {@link #pageKey}).
-     * Letters and digits arrive again as characters ({@link #panelChar}), so they're sent as keys only with Ctrl or
-     * Alt held, for shortcuts.
-     */
+    /** A key from Vivecraft's keyboard or menu buttons (Escape went back to the game already, see {@link #pageKey}). */
     private boolean panelKey(int key, boolean down) {
         if (!panelInput()) return false;
         if (down && DesktopClient.isHostKey(key)) { // Right Ctrl back to the game, as everywhere else
             onClose();
             return true;
         }
-        int vk = PanelKeys.vk(key);
-        if (vk == 0) return true;
-        if (VrMode.testing()) {
-            // The tester's real keyboard: once a key brought the app forward, the game never hears it let go, so a
-            // key goes as a whole tap at once, and Shift, Ctrl and Alt not at all (they'd stay held on the PC).
-            if (down && !PanelKeys.isCharacter(vk) && !PanelKeys.isModifier(vk) && mayType()) {
-                InjectedInput.key(vk, true);
-                InjectedInput.key(vk, false);
-            }
-            return true;
-        }
-        if (!down) {
-            if (keysPressed.remove(vk)) InjectedInput.key(vk, false);
-            return true;
-        }
-        if (PanelKeys.isCharacter(vk) && !ctrlOrAltHeld() || !mayType()) return true;
-        keysPressed.add(vk);
-        InjectedInput.key(vk, true); // a held key's repeats too, as Windows' own
+        laser.key(PanelKeys.vk(key), down);
         return true;
     }
 
     private boolean panelChar(int codePoint) {
         if (!panelInput()) return false;
-        if (codePoint < 32 || ctrlOrAltHeld() || !mayType()) return true;
-        for (char c : Character.toChars(codePoint)) InjectedInput.typeChar(c);
+        laser.character(codePoint);
         return true;
-    }
-
-    private boolean ctrlOrAltHeld() {
-        for (int vk : keysPressed) {
-            if (PanelKeys.isCtrlOrAlt(vk)) return true;
-        }
-        return false;
-    }
-
-    /**
-     * Keys go to the window in front, and never back into the game, which would send them on again. With the test
-     * switch the game is in front after every click on it, so the window clicked last comes forward first.
-     */
-    private boolean mayType() {
-        if (Win32.foregroundWindow() != GameWindow.hwnd(minecraft)) return true;
-        return VrMode.testing() && lastClicked != 0 && InjectedInput.bringForward(lastClicked);
     }
 
     /** Lets go of everything the panel pressed on the PC, so nothing stays held after it closes. */
     private void releasePanelInput() {
-        InjectedInput.releaseAll();
-        Arrays.fill(pressed, false);
-        Arrays.fill(testClicks, null);
-        keysPressed.clear();
+        laser.releaseAll();
     }
 
     @Override
@@ -885,6 +880,10 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (inBar(event.y())) {
+            super.mouseClicked(event, doubleClick);
+            return true;
+        }
         return panelPress(event.x(), event.y(), event.button()) || super.mouseClicked(event, doubleClick)
                 || startDrag(event.x(), event.y(), event.button());
     }
@@ -896,6 +895,7 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (inBar(event.y())) super.mouseReleased(event); // a press that began on the picture still lets go on the PC below
         return panelRelease(event.x(), event.y(), event.button()) || endDrag(event.button()) || super.mouseReleased(event);
     }
     *///?} else {
@@ -916,6 +916,10 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (inBar(mouseY)) {
+            super.mouseClicked(mouseX, mouseY, button);
+            return true;
+        }
         return panelPress(mouseX, mouseY, button) || super.mouseClicked(mouseX, mouseY, button) || startDrag(mouseX, mouseY, button);
     }
 
@@ -926,6 +930,7 @@ public final class DesktopScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (inBar(mouseY)) super.mouseReleased(mouseX, mouseY, button); // a press that began on the picture still lets go on the PC below
         return panelRelease(mouseX, mouseY, button) || endDrag(button) || super.mouseReleased(mouseX, mouseY, button);
     }
     //?}
@@ -933,6 +938,11 @@ public final class DesktopScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    /** The settings of a screen pointed at in VR ({@link #settingsWhilePointing}). */
+    boolean whilePointing() {
+        return pointing;
     }
 
     /** True while the real mouse controls the desktop, not Minecraft's cursor (the settings and sharing pages use that). */
@@ -988,6 +998,8 @@ public final class DesktopScreen extends Screen {
             g.fill(0, 0, PANEL_WIDTH, height, 0xFF161616);
             if (mode == Mode.SETTINGS) {
                 GuiDraw.text(g, font, title, PAD, 8, 0xFFFFFF);
+            } else if (mode == Mode.BORDER) {
+                GuiDraw.text(g, font, Component.translatable("desktopscreens.border.title"), PAD, 8, 0xFFFFFF);
                 GuiDraw.text(g, font, Component.translatable("desktopscreens.settings.color"), PAD, colorLabelY,
                         DesktopConfig.borderStyle == BorderStyle.SOLID ? 0xE0E0E0 : 0x707070);
             } else if (mode == Mode.PIP || mode == Mode.STREAM) {
@@ -999,6 +1011,8 @@ public final class DesktopScreen extends Screen {
             }
         } else {
             session.draw(g);
+            if (hasBar()) g.fill(0, height - BAR_HEIGHT, width, height, 0xFF161616);
+            if (picking != Pick.NONE) drawPickOutline(g, mouseX, mouseY);
         }
     }
 
@@ -1021,13 +1035,15 @@ public final class DesktopScreen extends Screen {
         keep(ShareStreamer.renderNotice(minecraft, g, width)); // the HUD, which shows it otherwise, is hidden here
         if (gliding) return;
         if (mode == Mode.DESKTOP) drawHints(g);
+        if (hasBar() && picking != Pick.NONE) GuiDraw.text(g, font, pickText, pickTextX, height - BAR_HEIGHT + 8, 0xFFFFFF);
         String error = session.error();
+        int bottom = hasBar() ? height - BAR_HEIGHT : height; // above the VR command bar
         if (error != null) {
-            drawBanner(g, height - font.lineHeight - 8, 0xFF6060, 255, Component.translatable("desktopscreens.error.capture", error));
+            drawBanner(g, bottom - font.lineHeight - 8, 0xFF6060, 255, Component.translatable("desktopscreens.error.capture", error));
         } else if (session.protectedContentHidden()) {
             // Otherwise it's just a black box with the subtitles still showing, which looks like a bug.
-            drawBanner(g, height - 2 * (font.lineHeight + 3) - 6, 0xFFD37F, 255, Component.translatable("desktopscreens.hint.protected"),
-                    Component.translatable("desktopscreens.hint.protected_how", DesktopClient.hostKey("M")));
+            drawBanner(g, bottom - 2 * (font.lineHeight + 3) - 6, 0xFFD37F, 255, Component.translatable("desktopscreens.hint.protected"),
+                    Component.translatable(DesktopClient.vr("desktopscreens.hint.protected_how"), DesktopClient.hostKey("M")));
         }
         session.shapeWindow(kept);
     }
@@ -1105,6 +1121,7 @@ public final class DesktopScreen extends Screen {
     @Override
     public void onClose() {
         releasePanelInput();
+        picking = Pick.NONE;
         if (leaving) return; // already gliding back out
         if (atScreen || gliding) {
             // Out of the in-place view first, then the camera glides back to the player's eyes, then this closes (tick).
@@ -1123,6 +1140,10 @@ public final class DesktopScreen extends Screen {
     public void removed() {
         releasePanelInput();
         DesktopConfig.save();
+        if (pointing) { // the session and the focus hand-off are the pointing's
+            WorldPointing.resume();
+            return;
+        }
         session.close();
         FocusHandOff.end();
         CameraGlide.stop();

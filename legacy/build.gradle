@@ -156,7 +156,9 @@ sourceSets.main.java.srcDir('../core/src/main/java')
 sourceSets.main.java.srcDir(relocateConcentus)
 
 // The texts, from the main build's en_us.json: 1.12.2 reads key=value files (.lang), and names items and blocks with
-// ".name" after the key ("item.desktopscreens.tablet.name", "tile.desktopscreens.screen.name").
+// ".name" after the key ("item.desktopscreens.tablet.name", "tile.desktopscreens.screen.name"). An item's key must not
+// be there without ".name": 1.12.2 translates the key first, then adds ".name" to the result, so with
+// "item.desktopscreens.tablet=Tablet" it looked up "Tablet.name" and showed just that (found 2026-10-30, there since 0.2.0).
 def convertLang = tasks.register('convertLang') {
     def source = file('../src/main/resources/assets/desktopscreens/lang/en_us.json')
     def output = layout.buildDirectory.dir('generated/lang')
@@ -167,8 +169,8 @@ def convertLang = tasks.register('convertLang') {
         def lines = []
         texts.each { key, text ->
             if (text.contains('\n')) throw new GradleException("$key: 1.12.2's .lang files can't hold a line break")
-            lines << "$key=$text"
             if (key ==~ /item\.desktopscreens\.[a-z_]+/) lines << "${key}.name=$text"
+            else lines << "$key=$text"
             if (key ==~ /block\.desktopscreens\.[a-z_]+/) lines << "tile.${key.substring('block.'.length())}.name=$text"
         }
         def dir = output.get().dir('assets/desktopscreens/lang').asFile

@@ -1,7 +1,5 @@
 package com.desktopscreens.client;
 
-import com.desktopscreens.DesktopScreens;
-import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
@@ -15,9 +13,7 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 //?}
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 
 import java.util.List;
 
@@ -30,16 +26,14 @@ import java.util.List;
  */
 final class GameCover {
     private static final int GREY = 0x16, TITLE = 0xFFFFFFFF, TEXT = 0xFFB0B0B0;
-    private static final ResourceLocation TEXTURE = DesktopScreens.id("game_cover");
     /** Font units: between lines, and more after the first. */
     private static final int LINE_GAP = 2, TITLE_GAP = 5;
-    private static RenderType renderType;
 
     private GameCover() {}
 
     private static List<Component> lines() {
         return List.of(Component.translatable("desktopscreens.cover.title"),
-                Component.translatable("desktopscreens.cover.how", DesktopClient.hostKey("O")),
+                Component.translatable(DesktopClient.vr("desktopscreens.cover.how"), DesktopClient.hostKey("O")),
                 Component.translatable("desktopscreens.cover.why"));
     }
 
@@ -77,19 +71,7 @@ final class GameCover {
 
     /** For screens in the world: draws in the cover's color (a one-pixel texture, so it's drawn like the picture). */
     static RenderType renderType(Minecraft mc) {
-        if (renderType == null) {
-            NativeImage pixel = new NativeImage(1, 1, false);
-            // Grey reads the same in any byte order.
-            //? if >=26.1 {
-            /*pixel.setPixel(0, 0, 0xFF000000 | GREY << 16 | GREY << 8 | GREY);
-            mc.getTextureManager().register(TEXTURE, new DynamicTexture(() -> "Desktop Screens game cover", pixel));
-            *///?} else {
-            pixel.setPixelRGBA(0, 0, 0xFF000000 | GREY << 16 | GREY << 8 | GREY);
-            mc.getTextureManager().register(TEXTURE, new DynamicTexture(pixel));
-            //?}
-            renderType = PictureRenderType.of(TEXTURE);
-        }
-        return renderType;
+        return SolidColor.of(mc, "game_cover", GREY);
     }
 
     /**

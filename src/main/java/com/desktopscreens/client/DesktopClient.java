@@ -105,7 +105,8 @@ public final class DesktopClient {
     }
 
     public static void tick(Minecraft mc) {
-        if (mc.screen instanceof DesktopScreen) Awake.now(mc); // using the desktop, or its settings
+        if (mc.screen instanceof DesktopScreen || WorldPointing.active()) Awake.now(mc); // using the desktop, or its settings
+        WorldPointing.tick(mc);
         FocusHandOff.tick(mc);
         FullscreenFocus.tick(mc);
         WorldScreens.tick(mc);
@@ -126,6 +127,10 @@ public final class DesktopClient {
         }
         while (OPEN_KEY.consumeClick()) {
             if (mc.screen != null) continue;
+            if (WorldPointing.active()) {
+                WorldPointing.stop("Use the screen again");
+                continue;
+            }
             ScreenGroups.Group screen = ScreenAim.usable();
             if (screen != null) useScreen(mc, screen);
             else if (hasTablet(mc)) openDesktop(mc);
@@ -133,7 +138,8 @@ public final class DesktopClient {
             // (2026-09-25), and big packs often have G on something else too.
         }
         while (PIP_KEY.consumeClick()) {
-            if (mc.screen == null) PictureInPicture.toggle(mc);
+            if (WorldPointing.active()) WorldPointing.onHostCombo(mc, 'P'); // pins the window under the cursor, as Right Ctrl + P
+            else if (mc.screen == null) PictureInPicture.toggle(mc);
         }
         // Not right away: the mouse moves onto the desktop when it opens, and letting go of the right button there
         // would be a right-click release in some app (on the desktop itself, that opens its context menu).
@@ -142,7 +148,8 @@ public final class DesktopClient {
             if (mc.screen == null) openDesktop(mc);
         }
         while (SETTINGS_KEY.consumeClick()) {
-            if (mc.screen == null) mc.setScreen(settingsScreen(null));
+            if (WorldPointing.active()) WorldPointing.openSettings(mc); // that screen's, as the bar's Settings
+            else if (mc.screen == null) mc.setScreen(settingsScreen(null));
         }
     }
 
@@ -174,6 +181,10 @@ public final class DesktopClient {
     private static void useScreen(Minecraft mc, ScreenGroups.Group screen) {
         if (!Win32.SUPPORTED) {
             mc.gui.getChat().addMessage(Component.translatable("desktopscreens.error.windows_only"));
+            return;
+        }
+        if (VrMode.pointing()) { // VR, "In the world": the screen itself, no menu (the Tablet keeps the panel)
+            WorldPointing.start(mc, screen);
             return;
         }
         DesktopConfig.load();
@@ -211,25 +222,38 @@ public final class DesktopClient {
     }
 
     /**
-     * The Screen Builder's hologram. Loaders call it every frame, after the world's see-through parts are drawn; from
-     * 26.2 on, while the world's things are handed in to be drawn ({@code out}, with {@code pose} to place them).
+     * The Screen Builder's hologram, and pointing at a screen in the world (the laser moves with every frame). Loaders
+     * call it every frame, after the world's see-through parts are drawn; from 26.2 on, while the world's things are
+     * handed in to be drawn ({@code out}, with {@code pose} to place them).
      */
     //? if >=26.2 {
     /*public static void renderWorld(Vec3 camera, SubmitNodeCollector out, PoseStack pose) {
+        WorldPointing.frame(Minecraft.getInstance());
         ScreenBuilderClient.render(Minecraft.getInstance(), camera, out, pose);
     }
     *///?} else if >=26.1 {
     /*public static void renderWorld(Vec3 camera) {
+        WorldPointing.frame(Minecraft.getInstance());
         ScreenBuilderClient.render(Minecraft.getInstance(), camera);
     }
     *///?} else {
     public static void renderWorld(Camera camera) {
+        WorldPointing.frame(Minecraft.getInstance());
         ScreenBuilderClient.render(Minecraft.getInstance(), camera);
     }
     //?}
 
     /** Keys in hints get their own color, so they stand out from the words. */
     private static final int KEY_COLOR = 0xFFD866;
+
+    /**
+     * A text that names Right Ctrl keys, as the player can follow it: in VR with controllers (and with the test switch)
+     * its ".vr" wording, which points at the command bar's buttons instead, as there's no keyboard (Test 58c,
+     * 2026-10-30: the note over the game said "[Right Ctrl + O]").
+     */
+    static String vr(String langKey) {
+        return VrMode.panel() ? langKey + ".vr" : langKey;
+    }
 
     /** A key as the hints show it, before what it does: its name in brackets, in the key color, like "[G]". */
     static Component key(Component name) {
@@ -332,6 +356,7 @@ public final class DesktopClient {
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> {
             if (mc.screen instanceof DesktopScreen screen) screen.onClose();
+            else if (WorldPointing.active()) WorldPointing.stop("the host key");
         });
     }
 
@@ -340,6 +365,7 @@ public final class DesktopClient {
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> {
             if (mc.screen instanceof DesktopScreen screen) screen.onGameChosen();
+            else if (WorldPointing.active()) WorldPointing.stop("Minecraft was switched to (Alt+Tab or its taskbar button)");
         });
     }
 
@@ -348,6 +374,7 @@ public final class DesktopClient {
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> {
             if (mc.screen instanceof DesktopScreen screen) screen.onHostCombo(virtualKey);
+            else if (WorldPointing.active()) WorldPointing.onHostCombo(mc, virtualKey);
         });
     }
 

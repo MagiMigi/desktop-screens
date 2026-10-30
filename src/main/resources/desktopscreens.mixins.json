@@ -5,8 +5,13 @@
   "compatibilityLevel": "JAVA_${java_version}",
   "client": [
     "CameraMixin",
+    "ChatComponentMixin",
     "ClientboundCustomPayloadPacketMixin",
+    "GameRendererAccessor",
+    "KeyboardHandlerMixin",
     "MinecraftMixin",
+    "MouseHandlerMixin",
+    "MultiPlayerGameModeMixin",
     "ScreenMixin",
     "SoundEngineAccessor",
     "SoundManagerAccessor"

@@ -42,7 +42,8 @@ final class ScreenAim {
         if (mc.player.getUUID().equals(owner)) {
             usable = group;
             kind = "use";
-            hint = Component.translatable("desktopscreens.hint.use_screen", DesktopClient.key(DesktopClient.OPEN_KEY));
+            // Not while pointing at a screen in VR: G ends that (Test 60c).
+            if (!WorldPointing.active()) hint = Component.translatable("desktopscreens.hint.use_screen", DesktopClient.key(DesktopClient.OPEN_KEY));
         } else if ((owner == null || mc.player.connection.getPlayerInfo(owner) == null) // off, or its owner left
                 && screenAt(mc, mc.hitResult) == group) { // within reach, so right-clicking works
             kind = "turn on";

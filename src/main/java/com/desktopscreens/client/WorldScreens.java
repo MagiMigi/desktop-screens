@@ -33,7 +33,8 @@ final class WorldScreens {
 
     /** One thing shown on screens: a monitor, or one window on it. */
     private static final class View {
-        final String monitorName, windowKey;
+        /** The choice's {@link SourceChoice#key}, which this view is kept under. */
+        final String key, monitorName, windowKey;
         final long windowHandle;
         final FrameStats stats = new FrameStats("Screens in the world");
         LiveCapture live;
@@ -52,6 +53,7 @@ final class WorldScreens {
         Picture picture;
 
         View(SourceChoice choice) {
+            key = choice.key();
             monitorName = choice.monitor;
             windowKey = choice.window;
             windowHandle = choice.handle;
@@ -155,10 +157,15 @@ final class WorldScreens {
      * their own capture. After the menu, until the window's own capture has a new picture (at most
      * {@link #RESUME_NANOS}), so it doesn't jump back to the picture from before. Null when the window's own picture is
      * the one to show, and while the monitor has no picture yet or the window is minimized (its last picture stays).
+     * <p>
+     * The same while the screen is being used (on PC, or pointed at in VR): the window's menus, dropdowns and tooltips
+     * are windows of their own, which its own capture leaves out, so they'd be clicked unseen, as DESIGN.md says for
+     * One window. Using it brought the window to the front first; watching shows it covered or not (2026-10-30).
      */
     private static Picture menuPicture(Minecraft mc, View view, LiveWindow lw, Monitor wanted, long now) {
-        // Usually the window's own pictures go on meanwhile anyway (PrintWindow, WindowCapture#picturesInMenus).
-        boolean paused = !LiveWindow.graphicsCaptureAllowed(mc) && !lw.picturesInMenus();
+        boolean inUse = view.key.equals(DesktopSession.usedInWorld());
+        // Usually the window's own pictures go on in menus anyway (PrintWindow, WindowCapture#picturesInMenus).
+        boolean paused = inUse || !LiveWindow.graphicsCaptureAllowed(mc) && !lw.picturesInMenus();
         if (paused) {
             view.resumeFrom = -1;
         } else if (view.menuLive != null) {
@@ -178,7 +185,7 @@ final class WorldScreens {
         }
         LiveCapture live = view.menuLive;
         long uploadNanos = live.update();
-        view.stats.frame("showing " + view.window, live.method() + " (a menu is open)", live.averageMillis());
+        view.stats.frame("showing " + view.window, live.method() + (inUse ? " (in use)" : " (a menu is open)"), live.averageMillis());
         if (uploadNanos > 0) view.stats.uploaded(uploadNanos);
         int w = live.frameWidth(), h = live.frameHeight();
         int[] area = view.window.rectOn(live.monitor());

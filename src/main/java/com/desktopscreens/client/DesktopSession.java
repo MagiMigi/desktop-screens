@@ -4,6 +4,7 @@ import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.core.AppWindow;
 import com.desktopscreens.core.ClickThrough;
 import com.desktopscreens.core.DesktopInput;
+import com.desktopscreens.core.InjectedInput;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
 import com.desktopscreens.core.PanelMapping;
@@ -64,6 +65,8 @@ final class DesktopSession {
      * game, you watch the screen in the world while the mouse and keyboard control its monitor.
      */
     private boolean inWorld;
+    /** The session using a screen in the world (on PC, or pointing at it in VR) since its input started; or null. */
+    private static DesktopSession usingInWorld;
     /**
      * The VR panel view ({@link VrMode}): the picture fills the window, which Vivecraft shows on its floating panel,
      * and the screen turns the laser, menu buttons and keyboard into real input ({@link #desktopPoint}). On
@@ -74,6 +77,8 @@ final class DesktopSession {
     private boolean panelControl;
     /** In the panel view: where the last frame's picture landed, for {@link #desktopPoint}; null before the first. */
     private PanelMapping mapping;
+    /** In the panel view: the strip at the bottom of the window kept for the VR command bar, in window pixels. */
+    private int barHeight;
     /** For the log: the protected-video warning as last shown, its changes since the last note, and when that was. */
     private boolean protectedShown;
     private int protectedChanges;
@@ -185,6 +190,9 @@ final class DesktopSession {
         Monitor on = w == null || w.isOn(target) ? null : Monitors.of(w.handle());
         if (on != null) choice.monitor = on.name;
         choice.changed();
+        // The picture is cut from the monitor, so whatever covers the window shows. The handover below brings it to
+        // the front; the VR panel has none, so it comes forward here, as a click on it would (2026-10-30).
+        if (w != null && panelControl) InjectedInput.bringForward(w.handle());
         if (on != null) {
             setTarget(on); // restarts the input, which gives the window the keyboard
             return;
@@ -209,8 +217,11 @@ final class DesktopSession {
         return closed;
     }
 
-    /** Follows the window being shown: onto another monitor, where it is now for drawing, and until it's closed. */
-    private void trackWindow() {
+    /**
+     * Follows the window being shown: onto another monitor, where it is now for drawing, and until it's closed. Every
+     * frame of the desktop view; every tick while pointing at a screen in the world, which draws without it.
+     */
+    void trackWindow() {
         if (window == null) return;
         if (!window.alive()) {
             DesktopScreens.LOG.info("The window shown ({}) was closed; showing the whole monitor", window);
@@ -309,6 +320,15 @@ final class DesktopSession {
         return inWorld;
     }
 
+    /**
+     * What the screen being used in the world shows ({@link SourceChoice#key}), while it's controlled; else null. Its
+     * one window shows cut from the monitor meanwhile, menus and all ({@link WorldScreens}).
+     */
+    static String usedInWorld() {
+        DesktopSession s = usingInWorld;
+        return s != null && s.inWorld && s.controlling() ? s.choice.key() : null;
+    }
+
     void setPanel(boolean panel) {
         this.panel = panel;
     }
@@ -316,6 +336,33 @@ final class DesktopSession {
     /** The VR panel view, see {@link #panel}. */
     boolean panel() {
         return panel;
+    }
+
+    /**
+     * Pointing at a screen in the world ({@link WorldPointing}): controlled as the panel view is (the same handover,
+     * and on Minecraft's own monitor the game window hidden from capture and letting clicks through), drawn by the
+     * screen in the world, as when using a screen on PC.
+     */
+    void setPointing(boolean pointing) {
+        panel = pointing;
+        inWorld = pointing;
+    }
+
+    /**
+     * What the picture shows, for {@link PanelMapping#atFraction}: the one window's visible frame, else the whole monitor.
+     * Null while the one window is minimized: its last picture stays, with nothing of it on the monitor to click (the
+     * whole monitor's mapping there sent clicks to whatever was under it, 2026-10-30).
+     */
+    PanelMapping fractionMapping() {
+        if (window == null) return new PanelMapping(0, 0, 1, 1, 0, 0, target.width, target.height, target.x, target.y);
+        int[] r = window.rectOn(target); // {left, top, right, bottom}
+        if (r == null) return null;
+        return new PanelMapping(0, 0, 1, 1, r[0] - target.x, r[1] - target.y, r[2] - r[0], r[3] - r[1], target.x, target.y);
+    }
+
+    /** In the panel view, the picture leaves this much of the window's bottom (window pixels) to the command bar; 0 for none. */
+    void setBarHeight(int windowPixels) {
+        barHeight = windowPixels;
     }
 
     /**
@@ -327,6 +374,18 @@ final class DesktopSession {
         if (m == null) return null;
         double scale = mc.getWindow().getGuiScale();
         return m.toDesktop(guiX * scale, guiY * scale);
+    }
+
+    /**
+     * In the panel view: where a rectangle of the desktop shows on the screen, {x, y, w, h} in GUI units, cut to the
+     * picture; null when none of it shows, or before the picture was first drawn.
+     */
+    double[] guiRect(int x, int y, int w, int h) {
+        PanelMapping m = mapping;
+        double[] r = m == null ? null : m.toWindowRect(x, y, w, h);
+        if (r == null) return null;
+        double scale = mc.getWindow().getGuiScale();
+        return new double[] {r[0] / scale, r[1] / scale, r[2] / scale, r[3] / scale};
     }
 
     /** Zoom only works in the desktop view of other monitors: Minecraft's own is always shown in place, 1:1. */
@@ -363,6 +422,7 @@ final class DesktopSession {
      */
     void startInput() {
         if (controlling()) return;
+        if (inWorld) usingInWorld = this;
         if (panel) {
             // The picture must show the desktop behind the game window, and clicks there must reach it. Not with the
             // test switch: the tester's mouse has to keep reaching the game window, where it stands in for the laser.
@@ -382,6 +442,7 @@ final class DesktopSession {
 
     /** Gives the mouse and keyboard back to Minecraft. */
     void stopInput() {
+        if (usingInWorld == this) usingInWorld = null;
         stopClickThrough(); // first, so the game window can be clicked again once it gets the focus back
         if (panelControl) {
             panelControl = false;
@@ -426,7 +487,8 @@ final class DesktopSession {
         beginFrame(activity());
         Window mcWindow = mc.getWindow();
         if (clickThrough != null && !panel) drawInPlace(g);
-        else drawView(g, 0, 0, mcWindow.getWidth(), mcWindow.getHeight(), panel ? null : zoom);
+        else if (panel) drawView(g, 0, 0, mcWindow.getWidth(), mcWindow.getHeight() - barHeight, null);
+        else drawView(g, 0, 0, mcWindow.getWidth(), mcWindow.getHeight(), zoom);
         stats.drew(System.nanoTime() - start);
     }
 

@@ -31,15 +31,35 @@ public final class PanelMapping {
 
     /** The desktop pixel under a point of the game window (window pixels), as {x, y}, or null off the picture. */
     public int[] toDesktop(double windowX, double windowY) {
-        if (windowX < picX || windowX >= picX + picW || windowY < picY || windowY >= picY + picH) return null;
-        return new int[] {
-                originX + along(windowX - picX, picW, srcX, srcW),
-                originY + along(windowY - picY, picH, srcY, srcH)};
+        return atFraction((windowX - picX) / picW, (windowY - picY) / picH);
     }
 
-    /** One axis: {@code offset} into a picture {@code size} long, onto the frame's {@code src} part, kept inside it. */
-    private static int along(double offset, int size, double src, double srcSize) {
-        int pixel = (int) Math.floor(src + offset * srcSize / size);
+    /**
+     * The desktop pixel at a fraction of the picture, from its top-left corner (0) to its bottom-right (1), as {x, y},
+     * or null off it. For a picture drawn anywhere, like a screen in the world.
+     */
+    public int[] atFraction(double u, double v) {
+        if (u < 0 || u >= 1 || v < 0 || v >= 1) return null;
+        return new int[] {originX + along(u, srcX, srcW), originY + along(v, srcY, srcH)};
+    }
+
+    /**
+     * Where a rectangle of the desktop (a window's frame, say) shows in the game window, as {x, y, w, h} in window
+     * pixels, cut to the picture; null when none of it shows.
+     */
+    public double[] toWindowRect(int x, int y, int w, int h) {
+        double scaleX = picW / srcW, scaleY = picH / srcH;
+        double left = Math.max(picX, picX + (x - originX - srcX) * scaleX);
+        double top = Math.max(picY, picY + (y - originY - srcY) * scaleY);
+        double right = Math.min(picX + picW, picX + (x + w - originX - srcX) * scaleX);
+        double bottom = Math.min(picY + picH, picY + (y + h - originY - srcY) * scaleY);
+        if (right <= left || bottom <= top) return null;
+        return new double[] {left, top, right - left, bottom - top};
+    }
+
+    /** One axis: a {@code fraction} of the picture, onto the frame's {@code src} part, kept inside it. */
+    private static int along(double fraction, double src, double srcSize) {
+        int pixel = (int) Math.floor(src + fraction * srcSize);
         int first = (int) Math.ceil(src), last = (int) Math.floor(src + srcSize) - 1;
         return Math.max(first, Math.min(last, pixel));
     }
