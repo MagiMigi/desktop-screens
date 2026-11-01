@@ -47,7 +47,10 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
     private record Piece(ScreenGroups.Group group, BlockPos pos, BlockState state, WorldScreens.Picture picture, float[] rect,
                          float[] cover, boolean drawsCover, WorldBar.Frame bar) {}
 
-    /** What {@code screen} shows this frame, or null; also notes whether it's the block that draws the game's cover. */
+    /**
+     * What {@code screen} shows this frame, or null; also notes whether it's the block that draws the game's cover. In VR
+     * a screen's hint shows at it ({@link ScreenAim#hintFrame}), also when it shows no picture: then that's all it draws.
+     */
     private static Piece piece(ScreenBlockEntity screen, Object pass) {
         Minecraft mc = Minecraft.getInstance();
         Level level = screen.getLevel();
@@ -55,8 +58,9 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
         if (level == null || mc.player == null || !(state.getBlock() instanceof ScreenBlock)) return null;
         ScreenGroups.Group group = ScreenGroups.of(level, screen.getBlockPos());
         if (group == null) return null;
+        WorldBar.Frame hint = ScreenAim.hintFrame(mc, group, screen.getBlockPos());
         UUID me = mc.player.getUUID(), owner = group.owner(level);
-        if (owner == null) return null;
+        if (owner == null) return hintOnly(group, screen, state, hint);
         boolean mine = owner.equals(me);
         // Our own desktop, or the picture its owner shares with us while they're here (else it would stay frozen on
         // their last one until the server turns the screen off) and we haven't hidden it; anyone else's stays dark.
@@ -64,7 +68,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
         long start = System.nanoTime();
         WorldScreens.Picture picture = mine ? WorldScreens.picture(mc, group)
                 : ownerHere && group.sharedWith(level, me) && !WatchChoices.hidden(level, group) ? SharedPictures.picture(mc, group, owner) : null;
-        if (picture == null) return null;
+        if (picture == null) return hintOnly(group, screen, state, hint);
         Awake.now(mc); // a live picture in sight
         // The picture's place on the whole screen, in blocks (columns right, rows up).
         float[] rect = group.pictureRect(picture.cropW(), picture.cropH());
@@ -79,7 +83,12 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
         if (mine) WorldScreens.drew(mc, group, System.nanoTime() - start);
         // The VR command bar under the screen pointed at, from one of its blocks.
         WorldBar.Frame bar = mine ? WorldPointing.barFrame(mc, group, screen.getBlockPos(), rect) : null;
-        return new Piece(group, screen.getBlockPos(), state, picture, rect, cover, drawsCover, bar);
+        return new Piece(group, screen.getBlockPos(), state, picture, rect, cover, drawsCover, bar != null ? bar : hint);
+    }
+
+    /** A block of a screen that shows no picture: only its hint, if it draws that, else nothing. */
+    private static Piece hintOnly(ScreenGroups.Group group, ScreenBlockEntity screen, BlockState state, WorldBar.Frame hint) {
+        return hint == null ? null : new Piece(group, screen.getBlockPos(), state, null, null, null, false, hint);
     }
 
     //? if >=26.1 {
@@ -107,7 +116,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
         if (p == null) return;
         pose.pushPose();
         turn(pose, p.group().facing);
-        collector.submitCustomGeometry(pose, p.picture().renderType(), (at, out) -> drawPiece(p, at.pose(), out));
+        if (p.picture() != null) collector.submitCustomGeometry(pose, p.picture().renderType(), (at, out) -> drawPiece(p, at.pose(), out));
         if (p.drawsCover()) {
             Minecraft mc = Minecraft.getInstance();
             Level level = mc.level;
@@ -128,7 +137,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
         if (p == null) return;
         pose.pushPose();
         turn(pose, p.group().facing);
-        drawPiece(p, pose.last().pose(), buffers.getBuffer(p.picture().renderType()));
+        if (p.picture() != null) drawPiece(p, pose.last().pose(), buffers.getBuffer(p.picture().renderType()));
         if (p.drawsCover()) {
             Minecraft mc = Minecraft.getInstance();
             drawCoverGlass(screen.getLevel(), p, pose.last().pose(), buffers.getBuffer(GameCover.renderType(mc)));

@@ -1,5 +1,6 @@
 package com.desktopscreens.mixin;
 
+import com.desktopscreens.client.TriggerStart;
 import com.desktopscreens.client.WorldPointing;
 import net.minecraft.client.MouseHandler;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,19 +14,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * While pointing at a screen in the world ({@link WorldPointing}): Vivecraft presses Minecraft's attack and use as real
  * mouse buttons, which then click the PC instead, and the game hears no button at all; the wheel scrolls the PC. With
- * the test switch the mouse stays free over the game window meanwhile, as it's the laser.
+ * the test switch the mouse stays free over the game window meanwhile, as it's the laser. Before that, in VR the
+ * trigger at your own screen starts using it ({@link TriggerStart}).
  */
 @Mixin(MouseHandler.class)
 abstract class MouseHandlerMixin {
     //? if >=1.21.9 {
     /*@Inject(method = "onButton", at = @At("HEAD"), cancellable = true)
     private void desktopscreens$button(long window, MouseButtonInfo info, int action, CallbackInfo ci) {
-        if (WorldPointing.onButton(info.button(), action)) ci.cancel();
+        if (TriggerStart.onButton(info.button(), action) || WorldPointing.onButton(info.button(), action)) ci.cancel();
     }
     *///?} else {
     @Inject(method = "onPress", at = @At("HEAD"), cancellable = true)
     private void desktopscreens$button(long window, int button, int action, int modifiers, CallbackInfo ci) {
-        if (WorldPointing.onButton(button, action)) ci.cancel();
+        if (TriggerStart.onButton(button, action) || WorldPointing.onButton(button, action)) ci.cancel();
     }
     //?}
 

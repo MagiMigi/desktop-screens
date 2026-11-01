@@ -1,5 +1,6 @@
 package com.desktopscreens.mixin;
 
+import com.desktopscreens.client.TriggerStart;
 import com.desktopscreens.client.WorldPointing;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
@@ -16,18 +17,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * While pointing at a screen in the world ({@link WorldPointing}), that screen can't be broken or switched off by hand:
  * Vivecraft breaks blocks a controller swings into, and uses ones it touches with the trigger, through these, not
- * through the attack and use buttons the pointing takes.
+ * through the attack and use buttons the pointing takes. In VR the trigger doesn't break your own screen while it's on
+ * either: it starts using it ({@link TriggerStart#keepsFromBreaking}).
  */
 @Mixin(MultiPlayerGameMode.class)
 abstract class MultiPlayerGameModeMixin {
     @Inject(method = "startDestroyBlock", at = @At("HEAD"), cancellable = true)
     private void desktopscreens$startBreaking(BlockPos pos, Direction side, CallbackInfoReturnable<Boolean> cir) {
-        if (WorldPointing.protects(pos)) cir.setReturnValue(false);
+        if (WorldPointing.protects(pos) || TriggerStart.keepsFromBreaking(pos)) cir.setReturnValue(false);
     }
 
     @Inject(method = "continueDestroyBlock", at = @At("HEAD"), cancellable = true)
     private void desktopscreens$keepBreaking(BlockPos pos, Direction side, CallbackInfoReturnable<Boolean> cir) {
-        if (WorldPointing.protects(pos)) cir.setReturnValue(false);
+        if (WorldPointing.protects(pos) || TriggerStart.keepsFromBreaking(pos)) cir.setReturnValue(false);
     }
 
     @Inject(method = "useItemOn", at = @At("HEAD"), cancellable = true)

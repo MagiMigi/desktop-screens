@@ -27,7 +27,7 @@ final class DesktopConfig {
     static final int MIN_THICKNESS = 1, MAX_THICKNESS = 16;
     static final int MIN_RAINBOW_SECONDS = 1, MAX_RAINBOW_SECONDS = 20;
     static final int MIN_MARGIN = 1, MAX_MARGIN = 30;
-    static final int MIN_PIP_SIZE = 15, MAX_PIP_SIZE = 50;
+    static final int MIN_PIP_SIZE = 15, MAX_PIP_SIZE = 75;
     static final int MIN_PIP_GAP = 0, MAX_PIP_GAP = 20;
 
     /**
@@ -42,6 +42,11 @@ final class DesktopConfig {
     static int pipSize = 25;
     /** How far it stays from the game window's edges (outside its border), in GUI units; 0 = right in the corner. */
     static int pipGap = 6;
+    /**
+     * Whether a big picture keeps clear of the hotbar (stays above it and the bars over it) instead of going under
+     * them, as it does by default (2026-11-01: at 75 % it reached the hotbar).
+     */
+    static boolean pipClearOfHotbar = false;
     /**
      * Where it was dragged to on its settings page (used while {@link #pipCorner} is CUSTOM): how far along the room
      * it has, left to right and top to bottom, 0 to 1; -1 while it was never dragged anywhere but a corner.
@@ -136,6 +141,7 @@ final class DesktopConfig {
         }
         pipSize = intValue(p, "pip.size", pipSize, MIN_PIP_SIZE, MAX_PIP_SIZE);
         pipGap = intValue(p, "pip.gap", pipGap, MIN_PIP_GAP, MAX_PIP_GAP);
+        pipClearOfHotbar = Boolean.parseBoolean(p.getProperty("pip.clearOfHotbar", Boolean.toString(pipClearOfHotbar)).trim());
         scaling = enumValue(p, "scaling", scaling);
         framed = Boolean.parseBoolean(p.getProperty("view.framed", Boolean.toString(framed)).trim());
         frameMargin = intValue(p, "view.frameMargin", frameMargin, MIN_MARGIN, MAX_MARGIN);
@@ -210,6 +216,7 @@ final class DesktopConfig {
         }
         p.setProperty("pip.size", Integer.toString(pipSize));
         p.setProperty("pip.gap", Integer.toString(pipGap));
+        p.setProperty("pip.clearOfHotbar", Boolean.toString(pipClearOfHotbar));
         p.setProperty("scaling", scaling.name());
         p.setProperty("view.framed", Boolean.toString(framed));
         p.setProperty("view.frameMargin", Integer.toString(frameMargin));

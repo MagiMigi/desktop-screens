@@ -38,6 +38,11 @@ final class PictureInPicture {
     /** How close a dragged picture comes to an edge or the middle before it snaps there, in GUI units. */
     private static final int SNAP = 5;
     private static final double[] SNAPS = {0, 0.5, 1};
+    /**
+     * The hotbar and the bars over it, in GUI units ({@link #hudHeight}): as wide as the hotbar with the off hand's slot
+     * on either side; as high as the hotbar and its selected slot, or with the hearts and armor rows over it.
+     */
+    private static final int HUD_WIDTH = 240, HOTBAR_HEIGHT = 23, BARS_HEIGHT = 49;
 
     /**
      * Where in the game window it sits: one of the corners, or CUSTOM, where it was dragged to on its settings page
@@ -199,7 +204,8 @@ final class PictureInPicture {
         if (p == null || p.cropW <= 0 || p.cropH <= 0) return false;
         // In window pixels, like the desktop view, so the picture lands on whole pixels.
         int scale = new ScaledResolution(mc).getScaleFactor();
-        int[] r = place(p.cropW, p.cropH, 0, 0, mc.displayWidth, mc.displayHeight, DesktopConfig.pipGap * scale + BorderRenderer.thickness());
+        int[] r = place(p.cropW, p.cropH, 0, 0, mc.displayWidth, mc.displayHeight, DesktopConfig.pipGap * scale + BorderRenderer.thickness(),
+                HUD_WIDTH * scale, hudHeight(mc) * scale);
         beginPixels(scale);
         draw(p, r);
         endPixels();
@@ -225,7 +231,8 @@ final class PictureInPicture {
         int barW = (int) Math.round(182 * scale * shrink), barH = (int) Math.round(22 * scale * shrink);
         Gui.drawRect(gx + (gw - barW) / 2, gy + gh - barH, gx + (gw + barW) / 2, gy + gh, 0xFF3A424A); // the hotbar
         int margin = (int) Math.round(DesktopConfig.pipGap * scale * shrink) + BorderRenderer.thickness();
-        int[] r = place(live ? p.cropW : 16, live ? p.cropH : 9, gx, gy, gw, gh, margin);
+        int[] r = place(live ? p.cropW : 16, live ? p.cropH : 9, gx, gy, gw, gh, margin,
+                (int) Math.round(HUD_WIDTH * scale * shrink), (int) Math.round(hudHeight(mc) * scale * shrink));
         previewGame = new int[] {gx, gy, gw, gh};
         previewPicture = r;
         previewMargin = margin;
@@ -331,9 +338,19 @@ final class PictureInPicture {
      * Where it goes in an area ({@code {x, y, w, h}}, window pixels): the picture's shape, the chosen share of the
      * area's width, in the chosen corner or dragged spot, at least {@code margin} (the border included) from the
      * area's edges. At most as tall as fits: a cap at half the height made 38 % to 50 % all the same size for a 4:3
-     * monitor (2026-09-27).
+     * monitor (2026-09-27). With the hotbar below the picture ({@link DesktopConfig#pipClearOfHotbar}), one that would
+     * reach the hotbar and the bars over it ({@code hudW} by {@code hudH} at the bottom middle) goes in the room above
+     * them instead; else they're drawn over it.
      */
-    private static int[] place(int pictureW, int pictureH, int x, int y, int w, int h, int margin) {
+    private static int[] place(int pictureW, int pictureH, int x, int y, int w, int h, int margin, int hudW, int hudH) {
+        int[] r = placeIn(pictureW, pictureH, x, y, w, h, margin);
+        if (!DesktopConfig.pipClearOfHotbar) return r;
+        int e = BorderRenderer.thickness(), hudLeft = x + (w - hudW) / 2, hudTop = y + h - hudH;
+        boolean reaches = r[0] - e < hudLeft + hudW && hudLeft < r[0] + r[2] + e && r[1] + r[3] + e > hudTop;
+        return reaches ? placeIn(pictureW, pictureH, x, y, w, h - hudH, margin) : r;
+    }
+
+    private static int[] placeIn(int pictureW, int pictureH, int x, int y, int w, int h, int margin) {
         int pw = Math.max(1, w * DesktopConfig.pipSize / 100);
         int ph = Math.max(1, (int) Math.round(pw * (double) pictureH / pictureW));
         if (ph > h - 2 * margin) {
@@ -360,6 +377,14 @@ final class PictureInPicture {
         GlStateManager.depthMask(true);
         GlStateManager.color(1, 1, 1, 1);
         GlStateManager.popMatrix();
+    }
+
+    /**
+     * How high the hotbar and the bars over it reach from the bottom of the game window, in GUI units: the hotbar and
+     * its selected slot; in survival and adventure also the experience bar, hearts, food and armor.
+     */
+    private static int hudHeight(Minecraft mc) {
+        return mc.player != null && (mc.player.isCreative() || mc.player.isSpectator()) ? HOTBAR_HEIGHT : BARS_HEIGHT;
     }
 
     /** The picture into {@code r}, with the desktop view's border around it, and the game covered where it shows. */

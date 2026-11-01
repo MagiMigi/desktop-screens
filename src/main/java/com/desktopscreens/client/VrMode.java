@@ -20,6 +20,9 @@ final class VrMode {
     private static final boolean TESTING = Boolean.getBoolean("desktopscreens.vrPanelTest");
 
     private static boolean looked;
+    /** RadialHandler.isShowing() ({@link #radialShowing}); null until found, or when it isn't there. */
+    private static Method radialShowing;
+    private static boolean radialLooked;
     /** VRClientAPI.instance(), or null without a usable Vivecraft. */
     private static Object api;
     private static Method isVRActive, isSeated;
@@ -156,6 +159,32 @@ final class VrMode {
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             DesktopScreens.LOG.info("Vivecraft's typing note couldn't be held back: {}", e.toString());
             airTypingNoted = null;
+        }
+    }
+
+    /**
+     * Vivecraft's radial menu is showing (RadialHandler.isShowing(), by name, in 1.3.15); false when it isn't, or that
+     * can't be read. Its picks are the trigger's too, so the trigger starts no screen meanwhile ({@link TriggerStart}).
+     */
+    static boolean radialShowing() {
+        if (!radialLooked) {
+            radialLooked = true;
+            if (api() != null) {
+                try {
+                    radialShowing = Class.forName("org.vivecraft.client_vr.gameplay.screenhandlers.RadialHandler", true,
+                            VrMode.class.getClassLoader()).getMethod("isShowing");
+                } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+                    DesktopScreens.LOG.info("Vivecraft's radial menu isn't where it was (a newer Vivecraft?): {}", e.toString());
+                }
+            }
+        }
+        if (radialShowing == null) return false;
+        try {
+            return (Boolean) radialShowing.invoke(null);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            DesktopScreens.LOG.info("Vivecraft's radial menu couldn't be read: {}", e.toString());
+            radialShowing = null;
+            return false;
         }
     }
 

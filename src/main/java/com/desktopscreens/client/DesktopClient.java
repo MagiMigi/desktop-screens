@@ -132,6 +132,12 @@ public final class DesktopClient {
                 continue;
             }
             ScreenGroups.Group screen = ScreenAim.usable();
+            if (screen == null && VrMode.vrActive()) {
+                // Heuwyn's picks of "Use the screen" on Vivecraft's radial menu worked only every second time (2026-10-31),
+                // and Vivecraft lets go of the radial's hold by itself, so it's something else: say what's in the way.
+                DesktopScreens.LOG.info("Use the screen (VR): none of your screens that's on where your head points (it aims with the head){}{}",
+                        TriggerStart.aimed(mc) != null ? "; the laser is on one" : "", hasTablet(mc) ? "; opened the Tablet's desktop instead" : "");
+            }
             if (screen != null) useScreen(mc, screen);
             else if (hasTablet(mc)) openDesktop(mc);
             // Else nothing, and quietly: the desktop comes with a tablet or a screen, not with the key alone
@@ -141,6 +147,7 @@ public final class DesktopClient {
             if (WorldPointing.active()) WorldPointing.onHostCombo(mc, 'P'); // pins the window under the cursor, as Right Ctrl + P
             else if (mc.screen == null) PictureInPicture.toggle(mc);
         }
+        TriggerStart.tick(mc); // a panel asked for with the trigger, once it's let go
         // Not right away: the mouse moves onto the desktop when it opens, and letting go of the right button there
         // would be a right-click release in some app (on the desktop itself, that opens its context menu).
         if (tabletPending && !mc.options.keyUse.isDown()) {
@@ -177,8 +184,8 @@ public final class DesktopClient {
         }
     }
 
-    /** G while looking at a screen in the world that's on for this player. */
-    private static void useScreen(Minecraft mc, ScreenGroups.Group screen) {
+    /** G while looking at a screen in the world that's on for this player, or the trigger at it in VR ({@link TriggerStart}). */
+    static void useScreen(Minecraft mc, ScreenGroups.Group screen) {
         if (!Win32.SUPPORTED) {
             mc.gui.getChat().addMessage(Component.translatable("desktopscreens.error.windows_only"));
             return;

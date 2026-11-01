@@ -5,6 +5,7 @@ import com.desktopscreens.core.AppWindow;
 import com.desktopscreens.core.ClickThrough;
 import com.desktopscreens.core.DesktopInput;
 import com.desktopscreens.core.InjectedInput;
+import com.desktopscreens.core.MenuArea;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
 import com.desktopscreens.core.PanelMapping;
@@ -30,6 +31,7 @@ import org.joml.Matrix4f;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 
+import java.util.Collections;
 import java.util.List;
 
 /** Everything one open desktop view needs: capture, texture and the mouse/keyboard handover. */
@@ -55,8 +57,12 @@ final class DesktopSession {
      * to the window, so its menus and dialogs show wherever they fall inside it.
      */
     private AppWindow window;
-    /** The window's part of the monitor this frame, {left, top, right, bottom} in desktop pixels; null while it's minimized. */
+    /**
+     * The window's part of the monitor this frame and its menus sticking out of it ({@link #windowAreaNow}),
+     * {left, top, right, bottom} in desktop pixels; null while it's minimized.
+     */
     private int[] windowArea;
+    private final MenuArea menuArea = new MenuArea();
     private boolean windowClosed;
     private final Zoom zoom = new Zoom();
     private final FrameStats stats = new FrameStats("Desktop view");
@@ -182,6 +188,7 @@ final class DesktopSession {
     void setWindow(AppWindow w) {
         window = w;
         windowArea = null;
+        menuArea.reset();
         zoom.reset();
         choice.window = w == null ? "" : w.key();
         choice.handle = w == null ? 0 : w.handle();
@@ -197,7 +204,7 @@ final class DesktopSession {
             setTarget(on); // restarts the input, which gives the window the keyboard
             return;
         }
-        if (w != null) windowArea = w.rectOn(target);
+        if (w != null) windowArea = windowAreaNow();
         if (input.isActive()) {
             input.show(w);
             if (w != null) input.focus(w);
@@ -219,7 +226,7 @@ final class DesktopSession {
 
     /**
      * Follows the window being shown: onto another monitor, where it is now for drawing, and until it's closed. Every
-     * frame of the desktop view; every tick while pointing at a screen in the world, which draws without it.
+     * frame of the desktop view, and while pointing at a screen in the world (every tick too, for a menu over it).
      */
     void trackWindow() {
         if (window == null) return;
@@ -227,6 +234,7 @@ final class DesktopSession {
             DesktopScreens.LOG.info("The window shown ({}) was closed; showing the whole monitor", window);
             window = null;
             windowArea = null;
+            menuArea.reset();
             windowClosed = true;
             choice.window = "";
             choice.handle = 0;
@@ -243,8 +251,24 @@ final class DesktopSession {
                 setTarget(on);
             }
         }
-        // Only for drawing: the mouse lock reads the window's frame itself, fresh every time.
-        windowArea = window.rectOn(target);
+        // For drawing and the laser's mapping: the mouse lock reads the window's frame itself, fresh every time.
+        windowArea = windowAreaNow();
+    }
+
+    /**
+     * The one window's part of the monitor now, with its menus sticking out of it ({@link MenuArea}): menus are windows
+     * of their own, so a picture cut to the window's frame cut them off (2026-11-01). It waits while a laser holds a
+     * button ({@link LaserInput#anyHeld}). Null while the window is minimized.
+     */
+    private int[] windowAreaNow() {
+        int[] r = window.rectOn(target);
+        return menuArea.update(r, r == null ? Collections.emptyList() : window.menuRectsOn(target), LaserInput.anyHeld(),
+                System.nanoTime() / 1_000_000);
+    }
+
+    /** The one window and its menus sticking out, as shown now ({@link #windowAreaNow}); null for the whole monitor or while minimized. */
+    int[] shownArea() {
+        return window != null ? windowArea : null;
     }
 
     /** True while clicks go through the game window to the apps behind it. */
@@ -329,6 +353,12 @@ final class DesktopSession {
         return s != null && s.inWorld && s.controlling() ? s.choice.key() : null;
     }
 
+    /** What that screen's one window shows while it's used: the window and its menus ({@link #shownArea}); else null. */
+    static int[] usedInWorldArea() {
+        DesktopSession s = usingInWorld;
+        return s != null && s.inWorld && s.controlling() ? s.shownArea() : null;
+    }
+
     void setPanel(boolean panel) {
         this.panel = panel;
     }
@@ -349,13 +379,14 @@ final class DesktopSession {
     }
 
     /**
-     * What the picture shows, for {@link PanelMapping#atFraction}: the one window's visible frame, else the whole monitor.
+     * What the picture shows, for {@link PanelMapping#atFraction}: the one window's visible frame and its menus sticking
+     * out ({@link #shownArea}), else the whole monitor.
      * Null while the one window is minimized: its last picture stays, with nothing of it on the monitor to click (the
      * whole monitor's mapping there sent clicks to whatever was under it, 2026-10-30).
      */
     PanelMapping fractionMapping() {
         if (window == null) return new PanelMapping(0, 0, 1, 1, 0, 0, target.width, target.height, target.x, target.y);
-        int[] r = window.rectOn(target); // {left, top, right, bottom}
+        int[] r = windowArea; // {left, top, right, bottom}
         if (r == null) return null;
         return new PanelMapping(0, 0, 1, 1, r[0] - target.x, r[1] - target.y, r[2] - r[0], r[3] - r[1], target.x, target.y);
     }
@@ -435,7 +466,7 @@ final class DesktopSession {
         } else if (isGameMonitor(target)) {
             startClickThrough();
         }
-        windowArea = window == null ? null : window.rectOn(target);
+        windowArea = window == null ? null : windowAreaNow();
         input.setHostKey(DesktopClient.hostScancode()); // picked in Controls, maybe since the last time
         input.enter(target, window); // after the click-through, so the focus goes to the app behind the game window
     }

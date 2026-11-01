@@ -553,8 +553,9 @@ public final class DesktopScreen extends Screen {
     }
 
     /**
-     * Picture-in-picture's page: on or off (so it works without binding its key), the corner, the size, what's pinned
-     * and how to pin something else, and Back. The preview on the right shows it in a small game window.
+     * Picture-in-picture's page: on or off (so it works without binding its key), the corner, the size, whether the
+     * hotbar goes over a big picture or below it, what's pinned and how to pin something else, and Back. The preview on
+     * the right shows it in a small game window.
      */
     private void addPipWidgets() {
         int x = PAD, w = PANEL_WIDTH - 2 * PAD, y = 20;
@@ -597,6 +598,16 @@ public final class DesktopScreen extends Screen {
         IntSlider gap = addRenderableWidget(new IntSlider(x + w - half, y, half, 20, "desktopscreens.pip.gap", DesktopConfig.MIN_PIP_GAP,
                 DesktopConfig.MAX_PIP_GAP, DesktopConfig.pipGap, value -> DesktopConfig.pipGap = value));
         gap.setTooltip(Tooltip.create(Component.translatable("desktopscreens.pip.gap.tooltip")));
+        y += 22;
+        CycleButton<Boolean> hotbar = addRenderableWidget(CycleButton.booleanBuilder(Component.translatable("desktopscreens.pip.hotbar.below"),
+                        //? if >=26.1 {
+                        /*Component.translatable("desktopscreens.pip.hotbar.over"), DesktopConfig.pipClearOfHotbar)
+                        *///?} else {
+                        Component.translatable("desktopscreens.pip.hotbar.over"))
+                .withInitialValue(DesktopConfig.pipClearOfHotbar)
+                        //?}
+                .create(x, y, w, 20, Component.translatable("desktopscreens.pip.hotbar"), (button, value) -> DesktopConfig.pipClearOfHotbar = value));
+        hotbar.setTooltip(Tooltip.create(Component.translatable("desktopscreens.pip.hotbar.tooltip")));
         y += 28;
         // What's pinned (a window by its title, found once here: that walks every window), how to pin, and its key.
         SourceChoice pinned = DesktopConfig.pip;
@@ -613,14 +624,30 @@ public final class DesktopScreen extends Screen {
         }
         Component key = DesktopClient.PIP_KEY.isUnbound() ? Component.translatable("desktopscreens.pip.key_none")
                 : Component.translatable("desktopscreens.pip.key", DesktopClient.key(DesktopClient.PIP_KEY));
-        List<FormattedCharSequence> lines = new ArrayList<>(font.split(what, w));
-        lines.add(FormattedCharSequence.EMPTY);
-        lines.addAll(font.split(Component.translatable(DesktopClient.vr("desktopscreens.pip.how"), DesktopClient.hostKey("P")), w));
-        lines.add(FormattedCharSequence.EMPTY);
-        lines.addAll(font.split(key, w));
-        pageText = lines;
+        pageText = fitted(y, w, what, Component.translatable(DesktopClient.vr("desktopscreens.pip.how"), DesktopClient.hostKey("P")), key);
         pageTextY = y;
         addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, button -> switchTo(Mode.SETTINGS)).bounds(x, height - 24, w, 20).build());
+    }
+
+    /**
+     * Paragraphs {@code width} wide from {@code y} down, a blank line between them, as many whole ones as fit above Back:
+     * on a short screen (Vivecraft's panel, a small window at a big GUI scale) the last ones are left out, rather than
+     * run under Back (Test 67, 2026-11-01: the PiP page's, once it had the Hotbar row). The first shows as far as it fits.
+     */
+    private List<FormattedCharSequence> fitted(int y, int width, Component... paragraphs) {
+        int room = (height - 24 - 2 - y) / (font.lineHeight + 1);
+        List<FormattedCharSequence> lines = new ArrayList<>();
+        for (Component paragraph : paragraphs) {
+            List<FormattedCharSequence> next = font.split(paragraph, width);
+            if (lines.isEmpty()) {
+                lines.addAll(next.subList(0, Math.max(0, Math.min(next.size(), room))));
+                continue;
+            }
+            if (lines.size() + 1 + next.size() > room) break;
+            lines.add(FormattedCharSequence.EMPTY);
+            lines.addAll(next);
+        }
+        return lines;
     }
 
     /**

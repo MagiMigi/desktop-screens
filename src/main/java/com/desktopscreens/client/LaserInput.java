@@ -8,7 +8,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Set;
 
 /**
@@ -29,6 +31,8 @@ final class LaserInput {
     private long lastClicked;
     /** With the test switch: where each button went down on the picture; the whole click goes once it comes up. */
     private final int[][] testClicks = new int[3][];
+    /** Those with a button down on the PC or waiting as a test click ({@link #anyHeld}). */
+    private static final Set<LaserInput> holding = Collections.newSetFromMap(new IdentityHashMap<>());
 
     LaserInput(Minecraft mc) {
         this.mc = mc;
@@ -54,6 +58,22 @@ final class LaserInput {
         return -1;
     }
 
+    /**
+     * A button is down on the PC through a laser, or waiting to go as a test click: a one-window picture doesn't zoom
+     * for a menu meanwhile ({@link com.desktopscreens.core.MenuArea}), as the zoom would move the cursor under a still
+     * laser and letting go would pick whatever is there by then (2026-11-01).
+     */
+    static boolean anyHeld() {
+        return !holding.isEmpty();
+    }
+
+    private void updateHeld() {
+        boolean held = false;
+        for (int i = 0; i < pressed.length; i++) held |= pressed[i] || testClicks[i] != null;
+        if (held) holding.add(this);
+        else holding.remove(this);
+    }
+
     /** The laser moved: the real cursor follows while it's on the picture. Not with the test switch (one real mouse). */
     void move(int[] p) {
         if (VrMode.testing() || p == null || Arrays.equals(p, laserAt)) return;
@@ -73,6 +93,7 @@ final class LaserInput {
             pressed[button] = true;
             laserAt = p;
         }
+        updateHeld();
     }
 
     /** A button let go: on the PC too, if it was pressed there; where the cursor is, once the laser left the picture. */
@@ -81,11 +102,13 @@ final class LaserInput {
         if (VrMode.testing()) {
             int[] at = testClicks[button];
             testClicks[button] = null;
+            updateHeld();
             if (at != null) testClick(button, at);
             return;
         }
         if (!pressed[button]) return;
         pressed[button] = false;
+        updateHeld();
         if (p != null) InjectedInput.buttonAt(button, false, p[0], p[1]);
         else InjectedInput.button(button, false);
     }
@@ -182,5 +205,6 @@ final class LaserInput {
         Arrays.fill(pressed, false);
         Arrays.fill(testClicks, null);
         keysPressed.clear();
+        updateHeld();
     }
 }

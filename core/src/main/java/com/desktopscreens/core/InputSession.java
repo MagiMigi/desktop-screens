@@ -18,6 +18,7 @@ import com.sun.jna.platform.win32.WinUser;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -86,6 +87,12 @@ final class InputSession {
      * onto a window behind it, which then came in front of it.
      */
     private volatile HWND shown;
+    /** The same window, for its menus, which the mouse may reach too ({@link #lockArea}); and that area's rule. */
+    private volatile AppWindow shownWindow;
+    private final MenuArea lockMenus = new MenuArea();
+    /** Its menus lately, and whose: walking every window for each event was too much for this thread. {@link #lockArea} only. */
+    private final Recent<List<int[]>> lockMenuList = new Recent<List<int[]>>(RELOCK_CHECK_MILLIS);
+    private AppWindow lockMenusOf;
     /**
      * While a window is being moved or resized, the mouse may leave the window shown: kept inside it, you could
      * shrink it but never make it bigger, since the mouse couldn't pass its edge. No clicks can happen meanwhile,
@@ -133,6 +140,7 @@ final class InputSession {
         this.lockRect = target.rect();
         this.fullscreenLockRect = awayFromAutoHideTaskbar(target, lockRect);
         this.shown = shown == null ? null : shown.hwnd;
+        this.shownWindow = shown;
         this.game = game;
         this.hostScancode = hostScancode;
         this.hostVirtualKey = Win32.virtualKey(hostScancode);
@@ -165,6 +173,7 @@ final class InputSession {
     /** Keeps the mouse inside this window from now on, or the whole monitor again with null. Any thread. */
     void show(AppWindow window) {
         shown = window == null ? null : window.hwnd;
+        shownWindow = window;
         relock();
     }
 
@@ -172,6 +181,35 @@ final class InputSession {
     private RECT area() {
         HWND w = shown;
         int[] r = w == null ? null : AppWindow.rectOn(w, target);
+        if (r == null) return null;
+        RECT out = new RECT();
+        out.left = r[0];
+        out.top = r[1];
+        out.right = r[2];
+        out.bottom = r[3];
+        return out;
+    }
+
+    /**
+     * Where the mouse may go while one window is shown: the window and its menus sticking out of it ({@link MenuArea}),
+     * so a menu that opens past the window's edge can be reached (2026-11-01). Null: none shown, or it's minimized.
+     * From {@link #relock} (synchronized) and the constructor only: the rule keeps what it showed last.
+     */
+    private RECT lockArea() {
+        AppWindow w = shownWindow;
+        int[] r = w == null ? null : w.rectOn(target);
+        long now = System.nanoTime() / 1000000;
+        List<int[]> menus = Collections.emptyList();
+        if (r != null) {
+            // The same for one relock check: this runs for every event Windows sends, on the keyboard hook's thread.
+            menus = w == lockMenusOf ? lockMenuList.get(now) : null;
+            if (menus == null) {
+                menus = w.menuRectsOn(target);
+                lockMenuList.put(menus, now);
+                lockMenusOf = w;
+            }
+        }
+        r = lockMenus.update(r, menus, false, now);
         if (r == null) return null;
         RECT out = new RECT();
         out.left = r[0];
@@ -357,7 +395,7 @@ final class InputSession {
     private RECT lockWanted() {
         RECT base = fullscreenLockRect != null && fullscreenInFront() ? fullscreenLockRect : lockRect;
         if (movingOrSizing) return base;
-        RECT a = area();
+        RECT a = lockArea();
         if (a == null) return base;
         RECT r = new RECT();
         r.left = Math.max(base.left, a.left);

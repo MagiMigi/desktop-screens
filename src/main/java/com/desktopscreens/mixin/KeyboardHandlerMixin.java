@@ -1,5 +1,6 @@
 package com.desktopscreens.mixin;
 
+import com.desktopscreens.client.TriggerStart;
 import com.desktopscreens.client.WorldPointing;
 import net.minecraft.client.KeyboardHandler;
 import org.spongepowered.asm.mixin.Mixin;
@@ -13,14 +14,15 @@ import net.minecraft.client.input.KeyEvent;
 
 /**
  * While pointing at a screen in the world ({@link WorldPointing}): Vivecraft's keyboard types on the PC, and its menu
- * button (Escape) goes back to the game instead of opening the pause menu. Other keys stay the game's.
+ * button (Escape) goes back to the game instead of opening the pause menu. Other keys stay the game's. A trigger bound
+ * to a key starts using your own screen in VR first ({@link TriggerStart}).
  */
 @Mixin(KeyboardHandler.class)
 abstract class KeyboardHandlerMixin {
     //? if >=1.21.9 {
     /*@Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void desktopscreens$key(long window, int action, KeyEvent event, CallbackInfo ci) {
-        if (WorldPointing.onKey(event.key(), action)) ci.cancel();
+        if (TriggerStart.onKey(event.key(), action) || WorldPointing.onKey(event.key(), action)) ci.cancel();
     }
 
     @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
@@ -30,7 +32,7 @@ abstract class KeyboardHandlerMixin {
     *///?} else {
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void desktopscreens$key(long window, int key, int scanCode, int action, int modifiers, CallbackInfo ci) {
-        if (WorldPointing.onKey(key, action)) ci.cancel();
+        if (TriggerStart.onKey(key, action) || WorldPointing.onKey(key, action)) ci.cancel();
     }
 
     @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)

@@ -9,12 +9,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 //? if >=26.1 {
 /*import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.LightCoordsUtil;
 *///?} else {
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 //?}
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -152,8 +150,11 @@ final class WorldBar {
         }
     }
 
-    /** What one frame draws, taken from the world first (26.1 draws later). */
-    record Frame(Layout layout, int hover, boolean[] buttons, List<Component> line, int lineAlpha, double[] outline, float[] rect) {}
+    /**
+     * What one frame draws, taken from the world first (26.1 draws later). {@code items}: the bar's buttons too; not for
+     * a screen's hint before it's used ({@link #hintFrame}), which is the line alone.
+     */
+    record Frame(Layout layout, boolean items, int hover, boolean[] buttons, List<Component> line, int lineAlpha, double[] outline, float[] rect) {}
 
     /** This frame's drawing for the bar by {@code screen} ({@code above} it, see {@link #layout}), whose picture is at {@code rect}. */
     Frame frame(Font font, DesktopSession session, ScreenGroups.Group screen, boolean above, float[] rect) {
@@ -174,7 +175,22 @@ final class WorldBar {
                     hint("desktopscreens.hint.vr_type", "desktopscreens.key.vr_keyboard"));
             alpha = fade(now, hintUntil);
         }
-        return new Frame(layout(font, screen, items, above), hover, buttons, line, alpha, picking != Pick.NONE ? outline : null, rect);
+        return new Frame(layout(font, screen, items, above), true, hover, buttons, line, alpha, picking != Pick.NONE ? outline : null, rect);
+    }
+
+    /**
+     * A screen's hint at the screen, in VR with controllers and with the test switch ({@link ScreenAim#hintFrame}): only
+     * {@code line}, as opaque as {@code alpha}, where the bar's line goes while the screen is used, so the two take turns
+     * in one place.
+     */
+    static Frame hintFrame(Font font, ScreenGroups.Group screen, boolean above, List<Component> line, int alpha) {
+        List<Component> items = List.of(
+                Component.translatable("desktopscreens.bar.pip"),
+                Component.translatable("desktopscreens.bar.one_window"),
+                Component.translatable("desktopscreens.bar.next_monitor"),
+                Component.translatable("desktopscreens.bar.settings"),
+                Component.translatable("desktopscreens.bar.back"));
+        return new Frame(layout(font, screen, items, above), false, -1, new boolean[items.size()], line, alpha, null, null);
     }
 
     /** One hint, "[Trigger] Click": the button's name in the key color, then what it does. */
@@ -216,10 +232,13 @@ final class WorldBar {
     static void draw(Frame f, Font font, PoseStack pose, MultiBufferSource out, int col, int row, float z) {
     //?}
         if (f.outline() != null) {
+            // Solid, as the plates: drawn as debug quads, 26.3 left it out (Test 67, 2026-11-01).
             //? if >=26.1 {
-            /*out.submitCustomGeometry(pose, RenderTypes.debugQuads(), (at, quads) -> drawOutline(f, at.pose(), quads, col, row, z));
+            /*out.submitCustomGeometry(pose, SolidColor.ofRgb(Minecraft.getInstance(), "bar_outline", OUTLINE & 0xFFFFFF),
+                    (at, quads) -> drawOutline(f, at.pose(), quads, col, row, z));
             *///?} else {
-            drawOutline(f, pose.last().pose(), out.getBuffer(RenderType.debugQuads()), col, row, z);
+            drawOutline(f, pose.last().pose(), out.getBuffer(SolidColor.ofRgb(Minecraft.getInstance(), "bar_outline", OUTLINE & 0xFFFFFF)),
+                    col, row, z);
             //?}
         }
         Layout l = f.layout();
@@ -229,7 +248,7 @@ final class WorldBar {
         // As signs do it: their text faces the one looking at them from higher z, with x to the right.
         pose.mulPose(Axis.YP.rotationDegrees(180));
         pose.scale(s, -s, s);
-        for (int i = 0; i < l.items().size(); i++) {
+        for (int i = 0; f.items() && i < l.items().size(); i++) {
             boolean hovered = f.buttons()[i] && i == f.hover();
             float x = (float) ((l.bar().x(i) - l.left()) / s) + PLATE_LEFT;
             text(font, pose, out, padded(l.items().get(i)).getVisualOrderText(), x, PLATE_LEFT, 0xFF000000 | (hovered ? TEXT_HOVER : TEXT),
@@ -307,9 +326,14 @@ final class WorldBar {
     /** A filled box {x0, x1, y0, y1} on the whole screen, relative to the block at {@code col, row}. */
     private static void box(Matrix4f m, VertexConsumer out, int col, int row, float x0, float x1, float y0, float y1, float z) {
         float xLeft = 1 - (x0 - col), xRight = 1 - (x1 - col), yBottom = y0 - row, yTop = y1 - row;
-        Vertices.posColor(out, m, xLeft, yBottom, z, OUTLINE);
-        Vertices.posColor(out, m, xRight, yBottom, z, OUTLINE);
-        Vertices.posColor(out, m, xRight, yTop, z, OUTLINE);
-        Vertices.posColor(out, m, xLeft, yTop, z, OUTLINE);
+        // Both sides, as the plates: the picture's drawing shows only the side facing it.
+        Vertices.posUv(out, m, xLeft, yBottom, z, 0.5f, 0.5f);
+        Vertices.posUv(out, m, xRight, yBottom, z, 0.5f, 0.5f);
+        Vertices.posUv(out, m, xRight, yTop, z, 0.5f, 0.5f);
+        Vertices.posUv(out, m, xLeft, yTop, z, 0.5f, 0.5f);
+        Vertices.posUv(out, m, xLeft, yTop, z, 0.5f, 0.5f);
+        Vertices.posUv(out, m, xRight, yTop, z, 0.5f, 0.5f);
+        Vertices.posUv(out, m, xRight, yBottom, z, 0.5f, 0.5f);
+        Vertices.posUv(out, m, xLeft, yBottom, z, 0.5f, 0.5f);
     }
 }

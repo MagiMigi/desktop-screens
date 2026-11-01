@@ -139,7 +139,7 @@ final class WorldScreens {
         if (uploadNanos > 0) view.stats.uploaded(uploadNanos);
         int w = live.frameWidth(), h = live.frameHeight();
         if (w == 0) return null;
-        int[] area = view.window != null ? view.window.rectOn(live.monitor()) : null; // null while it's minimized: the whole monitor
+        int[] area = view.window != null ? windowArea(view, live.monitor()) : null; // null while it's minimized: the whole monitor
         if (area != null) {
             Monitor m = live.monitor();
             int x = Math.max(0, area[0] - m.x), y = Math.max(0, area[1] - m.y);
@@ -188,12 +188,21 @@ final class WorldScreens {
         view.stats.frame("showing " + view.window, live.method() + (inUse ? " (in use)" : " (a menu is open)"), live.averageMillis());
         if (uploadNanos > 0) view.stats.uploaded(uploadNanos);
         int w = live.frameWidth(), h = live.frameHeight();
-        int[] area = view.window.rectOn(live.monitor());
+        int[] area = windowArea(view, live.monitor());
         if (w == 0 || area == null) return null;
         Monitor m = live.monitor();
         int x = Math.max(0, area[0] - m.x), y = Math.max(0, area[1] - m.y);
         int right = Math.min(w, area[2] - m.x), bottom = Math.min(h, area[3] - m.y);
         return right > x && bottom > y ? new Picture(live.renderType(), live.texture(), w, h, x, y, right - x, bottom - y, live.gameArea()) : null;
+    }
+
+    /**
+     * The view's one window on its monitor, {left, top, right, bottom}: while the screen is used, with the window's menus
+     * sticking out of it, as the session shows them ({@link DesktopSession#usedInWorldArea}, 2026-11-01). Null while
+     * it's minimized.
+     */
+    private static int[] windowArea(View view, Monitor monitor) {
+        return view.key.equals(DesktopSession.usedInWorld()) ? DesktopSession.usedInWorldArea() : view.window.rectOn(monitor);
     }
 
     /**

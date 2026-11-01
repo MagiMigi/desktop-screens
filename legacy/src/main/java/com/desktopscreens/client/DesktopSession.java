@@ -4,6 +4,7 @@ import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.core.AppWindow;
 import com.desktopscreens.core.ClickThrough;
 import com.desktopscreens.core.DesktopInput;
+import com.desktopscreens.core.MenuArea;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.Monitors;
 import com.desktopscreens.core.Win32;
@@ -15,6 +16,8 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import org.lwjgl.opengl.GL11;
+
+import java.util.Collections;
 
 /** Everything one open desktop view needs: capture, texture and the mouse/keyboard handover. */
 final class DesktopSession {
@@ -37,8 +40,12 @@ final class DesktopSession {
      * to the window, so its menus and dialogs show wherever they fall inside it.
      */
     private AppWindow window;
-    /** The window's part of the monitor this frame, {left, top, right, bottom} in desktop pixels; null while it's minimized. */
+    /**
+     * The window's part of the monitor this frame and its menus sticking out of it ({@link #windowAreaNow}),
+     * {left, top, right, bottom} in desktop pixels; null while it's minimized.
+     */
     private int[] windowArea;
+    private final MenuArea menuArea = new MenuArea();
     private boolean windowClosed;
     private final Zoom zoom = new Zoom();
     private final FrameStats stats = new FrameStats("Desktop view");
@@ -142,6 +149,7 @@ final class DesktopSession {
     void setWindow(AppWindow w) {
         window = w;
         windowArea = null;
+        menuArea.reset();
         zoom.reset();
         choice.window = w == null ? "" : w.key();
         choice.handle = w == null ? 0 : w.handle();
@@ -154,7 +162,7 @@ final class DesktopSession {
             setTarget(on); // restarts the input, which gives the window the keyboard
             return;
         }
-        if (w != null) windowArea = w.rectOn(target);
+        if (w != null) windowArea = windowAreaNow();
         if (input.isActive()) {
             input.show(w);
             if (w != null) input.focus(w);
@@ -181,6 +189,7 @@ final class DesktopSession {
             DesktopScreens.LOG.info("The window shown ({}) was closed; showing the whole monitor", window);
             window = null;
             windowArea = null;
+            menuArea.reset();
             windowClosed = true;
             choice.window = "";
             choice.handle = 0;
@@ -198,7 +207,17 @@ final class DesktopSession {
             }
         }
         // Only for drawing: the mouse lock reads the window's frame itself, fresh every time.
-        windowArea = window.rectOn(target);
+        windowArea = windowAreaNow();
+    }
+
+    /**
+     * The one window's part of the monitor now, with its menus sticking out of it ({@link MenuArea}): menus are windows
+     * of their own, so a picture cut to the window's frame cut them off (2026-11-01). Null while it's minimized.
+     */
+    private int[] windowAreaNow() {
+        int[] r = window.rectOn(target);
+        return menuArea.update(r, r == null ? Collections.<int[]>emptyList() : window.menuRectsOn(target), false,
+                System.nanoTime() / 1000000);
     }
 
     /** True while clicks go through the game window to the apps behind it. */
@@ -282,7 +301,7 @@ final class DesktopSession {
     void startInput() {
         if (input.isActive()) return;
         if (isGameMonitor(target)) startClickThrough();
-        windowArea = window == null ? null : window.rectOn(target);
+        windowArea = window == null ? null : windowAreaNow();
         input.setHostKey(DesktopClient.hostScancode()); // picked in Controls, maybe since the last time
         input.enter(target, window); // after the click-through, so the focus goes to the app behind the game window
     }

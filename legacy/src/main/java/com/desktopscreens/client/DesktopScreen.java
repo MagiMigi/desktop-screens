@@ -499,8 +499,8 @@ final class DesktopScreen extends GuiScreen {
     }
 
     /**
-     * Picture-in-picture's page: shown or not, the corner, its size and the gap to the edges, what's pinned and how to
-     * pin something else, and Back. The preview on the right shows it in a small game window.
+     * Picture-in-picture's page: shown or not, the corner, its size and the gap to the edges, whether the hotbar goes
+     * over a big picture or below it, what's pinned and how to pin something else, and Back. The preview on the right shows it in a small game window.
      */
     private void addPipWidgets() {
         int x = PAD, w = PANEL_WIDTH - 2 * PAD, y = 20;
@@ -525,6 +525,11 @@ final class DesktopScreen extends GuiScreen {
         add(new Widget.Slider(x + w - half, y, half, value -> new TextComponentTranslation("desktopscreens.pip.gap", value),
                 DesktopConfig.MIN_PIP_GAP, DesktopConfig.MAX_PIP_GAP, DesktopConfig.pipGap, value -> DesktopConfig.pipGap = value))
                 .tooltip(new TextComponentTranslation("desktopscreens.pip.gap.tooltip"));
+        y += 22;
+        add(new Widget.Cycle<>(x, y, w, new TextComponentTranslation("desktopscreens.pip.hotbar"), () -> Arrays.asList(false, true),
+                value -> new TextComponentTranslation(value ? "desktopscreens.pip.hotbar.below" : "desktopscreens.pip.hotbar.over"),
+                DesktopConfig.pipClearOfHotbar, value -> DesktopConfig.pipClearOfHotbar = value))
+                .tooltip(new TextComponentTranslation("desktopscreens.pip.hotbar.tooltip"));
         y += 28;
         // What's pinned (a window by its title, found once here: that walks every window), how to pin, and its key.
         SourceChoice pinned = DesktopConfig.pip;
@@ -541,14 +546,30 @@ final class DesktopScreen extends GuiScreen {
         }
         ITextComponent key = DesktopClient.PIP_KEY.getKeyCode() == Keyboard.KEY_NONE ? new TextComponentTranslation("desktopscreens.pip.key_none")
                 : new TextComponentTranslation("desktopscreens.pip.key", DesktopClient.key(DesktopClient.PIP_KEY));
-        List<String> lines = new ArrayList<>(wrap(what, w));
-        lines.add("");
-        lines.addAll(wrap(new TextComponentTranslation("desktopscreens.pip.how", DesktopClient.hostKey("P")), w));
-        lines.add("");
-        lines.addAll(wrap(key, w));
-        pageText = lines;
+        pageText = fitted(y, w, what, new TextComponentTranslation("desktopscreens.pip.how", DesktopClient.hostKey("P")), key);
         pageTextY = y;
         add(new Widget.Button(x, height - 24, w, new TextComponentTranslation("gui.back"), () -> switchTo(Mode.SETTINGS)));
+    }
+
+    /**
+     * Paragraphs {@code width} wide from {@code y} down, a blank line between them, as many whole ones as fit above Back:
+     * on a short screen the last ones are left out, rather than run under Back (Test 67, 2026-11-01: the PiP page's, once
+     * it had the Hotbar row). The first shows as far as it fits.
+     */
+    private List<String> fitted(int y, int width, ITextComponent... paragraphs) {
+        int room = (height - 24 - 2 - y) / (fontRenderer.FONT_HEIGHT + 1);
+        List<String> lines = new ArrayList<>();
+        for (ITextComponent paragraph : paragraphs) {
+            List<String> next = wrap(paragraph, width);
+            if (lines.isEmpty()) {
+                lines.addAll(next.subList(0, Math.max(0, Math.min(next.size(), room))));
+                continue;
+            }
+            if (lines.size() + 1 + next.size() > room) break;
+            lines.add("");
+            lines.addAll(next);
+        }
+        return lines;
     }
 
     /**

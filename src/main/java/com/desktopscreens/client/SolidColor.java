@@ -11,8 +11,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A grey drawn in the world like the desktop picture ({@link PictureRenderType}): a one-pixel texture, solid, hiding
- * what's behind it. For the game's cover on screens and the VR bar's plates: see-through ones mix with the text over
+ * A grey (or a color) drawn in the world like the desktop picture ({@link PictureRenderType}): a one-pixel texture, solid,
+ * hiding what's behind it. For the game's cover on screens, the VR bar's plates and its outline: see-through ones mix with the text over
  * them on 26.3, which blends everything see-through regardless of order (Test 60b, 2026-10-30). Render thread.
  */
 final class SolidColor {
@@ -22,15 +22,20 @@ final class SolidColor {
 
     /** A grey {@code grey} (0-255) called {@code name}, made the first time it's asked for. Quads take the texture's middle (0.5, 0.5). */
     static RenderType of(Minecraft mc, String name, int grey) {
+        return ofRgb(mc, name, grey << 16 | grey << 8 | grey);
+    }
+
+    /** The same in a color, {@code rgb} as 0xRRGGBB (the VR bar's outline around the window to pick). */
+    static RenderType ofRgb(Minecraft mc, String name, int rgb) {
         return TYPES.computeIfAbsent(name, n -> {
             ResourceLocation texture = DesktopScreens.id(n);
             NativeImage pixel = new NativeImage(1, 1, false);
-            // Grey reads the same in any byte order.
             //? if >=26.1 {
-            /*pixel.setPixel(0, 0, 0xFF000000 | grey << 16 | grey << 8 | grey);
+            /*pixel.setPixel(0, 0, 0xFF000000 | rgb); // ARGB
             mc.getTextureManager().register(texture, new DynamicTexture(() -> "Desktop Screens " + n, pixel));
             *///?} else {
-            pixel.setPixelRGBA(0, 0, 0xFF000000 | grey << 16 | grey << 8 | grey);
+            // ABGR, whatever the name says.
+            pixel.setPixelRGBA(0, 0, 0xFF000000 | (rgb & 0xFF) << 16 | (rgb & 0xFF00) | rgb >> 16 & 0xFF);
             mc.getTextureManager().register(texture, new DynamicTexture(pixel));
             //?}
             return PictureRenderType.of(texture);

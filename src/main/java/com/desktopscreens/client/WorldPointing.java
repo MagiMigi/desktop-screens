@@ -214,22 +214,62 @@ public final class WorldPointing {
             bar.setHover(-1);
             return;
         }
+        // The one window and its menus every frame, as the desktop view does: the picture is cut to them, and the laser
+        // aims through them. Once a tick, a window being moved was drawn and aimed at up to 50 ms late (the final review).
+        session.trackWindow();
         if (!VrMode.testing() && VrMode.keyboardShowing()) {
             // Typing on Vivecraft's keyboard, which floats in front: the cursor stays where it was, or it followed the spot
             // behind the keyboard, and menus and tooltips there came and went (2026-10-31). The stick still scrolls there.
             stickScroll(seconds);
             return;
         }
-        double[] ray = VrMode.testing() ? mouseRay(mc) : VrMode.mainHandRay();
+        aim(mc, false);
+        if (!VrMode.testing()) stickScroll(seconds);
+    }
+
+    /**
+     * The laser's spot on the glass, the bar's item or the desktop pixel there, and the real cursor to it. {@code atStart}:
+     * the pull that started pointing ({@link #pressAtStart}), when this screen may have no picture of its own yet; then
+     * the picture is placed for the size the session shows.
+     */
+    private static void aim(Minecraft mc, boolean atStart) {
+        double[] ray = laserRay(mc);
         hit = ray == null ? null : group.onGlass(new Vec3(ray[0], ray[1], ray[2]), new Vec3(ray[3], ray[4], ray[5]), RANGE);
         WorldScreens.Picture picture = hit == null ? null : WorldScreens.picture(mc, group);
-        float[] rect = picture == null ? null : group.pictureRect(picture.cropW(), picture.cropH()); // {left, bottom, width, height}, rows up
+        float[] rect = picture != null ? group.pictureRect(picture.cropW(), picture.cropH()) // {left, bottom, width, height}, rows up
+                : hit != null && atStart ? shownRect() : null;
         barAt = rect == null ? -1 : WorldBar.layout(mc.font, group, bar.items(session), barAbove).at(hit[0], hit[1]);
         point = rect == null || barAt >= 0 ? null : desktopPoint(mc, hit, rect);
         bar.setHover(barAt);
         if (bar.picking() != WorldBar.Pick.NONE) bar.setOutline(pickOutline());
         laser.move(point);
-        if (!VrMode.testing()) stickScroll(seconds);
+    }
+
+    /** Where the picture goes on the glass for what the session shows: the one window and its menus, else the monitor. */
+    private static float[] shownRect() {
+        int[] a = session.shownArea();
+        Monitor m = session.target();
+        return a != null ? group.pictureRect(a[2] - a[0], a[3] - a[1]) : group.pictureRect(m.width, m.height);
+    }
+
+    /**
+     * Right after {@link #start}, for the pull of the trigger that started it ({@link TriggerStart}): aims at once and
+     * takes the press as {@link #onButton} or {@link #onKey} would, so it clicks the PC where the laser is (only on the
+     * picture), and its release follows as any click's. A first pull that did nothing would be one pick too many.
+     */
+    static void pressAtStart(Minecraft mc, int code, boolean key) {
+        if (group == null) return;
+        aim(mc, true);
+        if (key) onKey(code, InputConstants.PRESS);
+        else onButton(code, InputConstants.PRESS);
+    }
+
+    /**
+     * The laser now, {x, y, z, dirX, dirY, dirZ} in the world: the main hand's in VR; with the test switch, from the
+     * camera through the mouse ({@link #mouseRay}). Null without one.
+     */
+    static double[] laserRay(Minecraft mc) {
+        return VrMode.testing() ? mouseRay(mc) : VrMode.mainHandRay();
     }
 
     /** The desktop pixel under a spot of the glass, or null off the picture (or where the game window is in the way). */
@@ -260,7 +300,7 @@ public final class WorldPointing {
      * The block that draws the bar: in the row next to it (the screen's bottom or top), the nearest to the middle, so
      * it's in view whenever the bar is (Minecraft draws the blocks of the parts of the world in view).
      */
-    private static BlockPos barBlock(ScreenGroups.Group screen, int row) {
+    static BlockPos barBlock(ScreenGroups.Group screen, int row) {
         double middle = screen.minCol + (screen.cols - 1) / 2.0;
         BlockPos best = null;
         for (BlockPos p : screen.members) {
@@ -274,7 +314,7 @@ public final class WorldPointing {
      * Whether the bar goes over the screen: when solid blocks are right under it (a screen standing on the floor hid
      * the bar's text, Test 58b, 2026-10-30) and none right over it. Under it otherwise, also when both are.
      */
-    private static boolean barAbove(Level level, ScreenGroups.Group screen) {
+    static boolean barAbove(Level level, ScreenGroups.Group screen) {
         return solidRow(level, screen, screen.minRow - 1) && !solidRow(level, screen, screen.minRow + screen.rows);
     }
 
@@ -323,7 +363,10 @@ public final class WorldPointing {
         bar.flash(Component.translatable("desktopscreens.hint.monitor", Commands.monitorLabel(session, session.target())));
     }
 
-    /** With the test switch: from the camera through the mouse, which is free over the game window meanwhile. */
+    /**
+     * With the test switch: from the camera through the mouse, which is free over the game window while pointing; while
+     * the game holds it (before pointing), through the crosshair.
+     */
     private static double[] mouseRay(Minecraft mc) {
         //? if >=26.2 {
         /*Camera camera = mc.gameRenderer.mainCamera();
@@ -338,7 +381,9 @@ public final class WorldPointing {
         Vector3fc look = camera.getLookVector(), up = camera.getUpVector(), left = camera.getLeftVector();
         //?}
         Window window = mc.getWindow();
-        double nx = 2 * mc.mouseHandler.xpos() / window.getScreenWidth() - 1, ny = 1 - 2 * mc.mouseHandler.ypos() / window.getScreenHeight();
+        boolean held = mc.mouseHandler.isMouseGrabbed(); // its position runs on unbounded then
+        double nx = held ? 0 : 2 * mc.mouseHandler.xpos() / window.getScreenWidth() - 1;
+        double ny = held ? 0 : 1 - 2 * mc.mouseHandler.ypos() / window.getScreenHeight();
         // The field of view the world is drawn with, not just the setting: flying and sprinting widen it.
         //? if >=26.1 {
         /*double fov = camera.getFov();
@@ -371,7 +416,7 @@ public final class WorldPointing {
     }
 
     /** A key or button is bound to {@code mapping} (attack, use) as it's set in Controls. */
-    private static boolean bound(KeyMapping mapping, InputConstants.Type type, int value) {
+    static boolean bound(KeyMapping mapping, InputConstants.Type type, int value) {
         InputConstants.Key key = InputConstants.getKey(mapping.saveString());
         return key.getType() == type && key.getValue() == value;
     }

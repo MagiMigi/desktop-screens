@@ -12,8 +12,11 @@ import com.sun.jna.platform.win32.WinNT.HANDLE;
 import com.sun.jna.platform.win32.WinUser;
 import com.sun.jna.ptr.IntByReference;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -23,6 +26,7 @@ import java.util.Set;
 public final class AppWindow {
     private static final int GWL_STYLE = -16, GWL_EXSTYLE = -20, WS_CAPTION = 0x00C00000, WS_THICKFRAME = 0x00040000;
     private static final int WS_EX_TOOLWINDOW = 0x00000080, WS_EX_APPWINDOW = 0x00040000;
+    private static final int WS_POPUP = 0x80000000, WS_EX_TRANSPARENT = 0x00000020;
     private static final int DWMWA_EXTENDED_FRAME_BOUNDS = 9, DWMWA_CLOAKED = 14, SW_RESTORE = 9;
     private static final int PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     /** Shell windows that must never be moved, or shown on their own: taskbars and the desktop itself. */
@@ -113,6 +117,41 @@ public final class AppWindow {
     /** Brings it back if it's minimized. Async, so a frozen app can't freeze the game. */
     public void restore() {
         if (U32.I.IsIconic(hwnd)) U32.I.ShowWindowAsync(hwnd, SW_RESTORE);
+    }
+
+    /**
+     * The menus and dropdown lists its program has open, each {left, top, right, bottom} in desktop pixels, cut to the
+     * monitor (none of it there: left out). Windows makes them windows of their own, so a one-window picture cut to the
+     * window's frame cut them off where they stuck out (2026-11-01, {@link MenuArea}). Menus ({@code #32768}), dropdown
+     * lists ({@code ComboLBox}) and the program's other popups that take clicks (a browser's select list); never
+     * tooltips, which come and go as the mouse moves and are only read, or a menu's shadow.
+     */
+    public List<int[]> menuRectsOn(final Monitor m) {
+        final int frame = processOf(hwnd), app = processId(); // a store app's menus are the app's, not its frame's
+        final List<int[]> rects = new ArrayList<int[]>();
+        User32.INSTANCE.EnumWindows(new WinUser.WNDENUMPROC() {
+            @Override
+            public boolean callback(HWND w, Pointer data) {
+                if (w.equals(hwnd) || !User32.INSTANCE.IsWindowVisible(w)) return true;
+                int process = processOf(w);
+                if ((process == frame || process == app) && isMenu(w) && !cloaked(w)) {
+                    int[] r = rectOn(w, m);
+                    if (r != null) rects.add(r);
+                }
+                return true;
+            }
+        }, null);
+        return rects;
+    }
+
+    /** A menu or list, for {@link #menuRectsOn}: by class, else a popup that takes clicks and isn't an app window. */
+    private static boolean isMenu(HWND w) {
+        String cls = className(w);
+        if ("#32768".equals(cls) || "ComboLBox".equals(cls)) return true;
+        if ("SysShadow".equals(cls) || cls.toLowerCase(Locale.ROOT).contains("tooltip")) return false; // tooltips_class32 too
+        if (SHELL_CLASSES.contains(cls)) return false; // Explorer's taskbars and desktop are its popups too
+        int style = User32.INSTANCE.GetWindowLong(w, GWL_STYLE), exStyle = User32.INSTANCE.GetWindowLong(w, GWL_EXSTYLE);
+        return (style & WS_POPUP) != 0 && (exStyle & WS_EX_TRANSPARENT) == 0 && !isAppWindow(w);
     }
 
     public boolean sameAs(AppWindow other) {
