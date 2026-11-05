@@ -167,7 +167,7 @@ final class WorldBar {
         if (now < flashUntil + DesktopScreen.FADE_MILLIS) {
             line = List.of(flash);
             alpha = fade(now, flashUntil);
-        } else if (now < hintUntil + DesktopScreen.FADE_MILLIS) {
+        } else if (DesktopConfig.keyHints && now < hintUntil + DesktopScreen.FADE_MILLIS) { // Off: only the replies above
             line = List.of(hint("desktopscreens.hint.vr_click", "desktopscreens.key.vr_trigger"),
                     hint("desktopscreens.hint.vr_right_click", "desktopscreens.key.vr_use"),
                     hint("desktopscreens.hint.vr_scroll", "desktopscreens.key.vr_stick"),
@@ -300,14 +300,15 @@ final class WorldBar {
     private static void plate(Matrix4f m, VertexConsumer out, float x, float y, float w) {
         // Behind the text (toward the screen's back here), by less than a hair at any scale.
         float z = -PLATE_DEPTH, x0 = x - PLATE_LEFT, x1 = x + w, y0 = y - 1, y1 = y + ROW - 1;
-        Vertices.posUv(out, m, x0, y0, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, x0, y1, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, x1, y1, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, x1, y0, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, x1, y0, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, x1, y1, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, x0, y1, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, x0, y0, z, 0.5f, 0.5f);
+        int tint = PictureRenderType.tint();
+        Vertices.picture(out, m, x0, y0, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, x0, y1, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, x1, y1, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, x1, y0, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, x1, y0, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, x1, y1, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, x0, y1, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, x0, y0, z, 0.5f, 0.5f, tint);
     }
 
     /** The frame around the window to pick, on the picture, from the block at {@code col, row} (in its model's coordinates). */
@@ -327,13 +328,14 @@ final class WorldBar {
     private static void box(Matrix4f m, VertexConsumer out, int col, int row, float x0, float x1, float y0, float y1, float z) {
         float xLeft = 1 - (x0 - col), xRight = 1 - (x1 - col), yBottom = y0 - row, yTop = y1 - row;
         // Both sides, as the plates: the picture's drawing shows only the side facing it.
-        Vertices.posUv(out, m, xLeft, yBottom, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, xRight, yBottom, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, xRight, yTop, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, xLeft, yTop, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, xLeft, yTop, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, xRight, yTop, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, xRight, yBottom, z, 0.5f, 0.5f);
-        Vertices.posUv(out, m, xLeft, yBottom, z, 0.5f, 0.5f);
+        int tint = PictureRenderType.tint();
+        Vertices.picture(out, m, xLeft, yBottom, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, xRight, yBottom, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, xRight, yTop, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, xLeft, yTop, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, xLeft, yTop, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, xRight, yTop, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, xRight, yBottom, z, 0.5f, 0.5f, tint);
+        Vertices.picture(out, m, xLeft, yBottom, z, 0.5f, 0.5f, tint);
     }
 }

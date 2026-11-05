@@ -27,6 +27,7 @@ final class DesktopConfig {
     static final int MIN_MARGIN = 1, MAX_MARGIN = 30;
     static final int MIN_PIP_SIZE = 15, MAX_PIP_SIZE = 75;
     static final int MIN_PIP_GAP = 0, MAX_PIP_GAP = 20;
+    static final int MIN_SHADER_BRIGHTNESS = 20, MAX_SHADER_BRIGHTNESS = 100;
 
     /**
      * What G and the tablet show: a monitor and maybe one window on it (Right Ctrl + M, Right Ctrl + W, the settings'
@@ -57,6 +58,14 @@ final class DesktopConfig {
     static boolean framed = false;
     /** How much world the framed view shows on each side, in percent of the window's shorter side. */
     static int frameMargin = 10;
+    /**
+     * The key hints at the top when you start using the desktop (and, in VR, under the bar of a screen pointed at). Off,
+     * only the reply to a key just pressed and the warnings show. On by default, so new players learn the keys; one
+     * who knows them turns it off in the settings, where an annoyed player looks first. Added 2026-11-05: the banner
+     * covered the middle of a full-size Chrome's tabs for 6 seconds. A "Short" choice was dropped: one line in the same
+     * place still covered them.
+     */
+    static boolean keyHints = true;
     /** DXGI Desktop Duplication (up to the monitor's refresh rate); off means GDI only (about 60 fps). */
     static boolean fastCapture = true;
     /**
@@ -77,6 +86,13 @@ final class DesktopConfig {
      * Vivecraft's panel ({@link WorldPointing}). Off by default: the panel was there first and is tested more.
      */
     static boolean vrInWorld = false;
+    /**
+     * How bright pictures on screens in the world are drawn while a shader pack is on, in percent
+     * ({@link IrisPrograms#tint}): the pack lights them as fully lit, which was too bright (Test 69). 55 looked right
+     * with Complementary Reimagined by day and at night (Test 70, 2026-11-05). Each player's own, since it depends on
+     * their shader pack: on a server, two players can watch one screen with different packs.
+     */
+    static int shaderBrightness = 55;
     static BorderStyle borderStyle = BorderStyle.SOLID;
     /** 0xRRGGBB */
     static int borderColor = 0x808080;
@@ -148,10 +164,12 @@ final class DesktopConfig {
         scaling = enumValue(p, "scaling", scaling);
         framed = Boolean.parseBoolean(p.getProperty("view.framed", Boolean.toString(framed)).trim());
         frameMargin = intValue(p, "view.frameMargin", frameMargin, MIN_MARGIN, MAX_MARGIN);
+        keyHints = Boolean.parseBoolean(p.getProperty("view.keyHints", Boolean.toString(keyHints)).trim());
         fastCapture = Boolean.parseBoolean(p.getProperty("fastCapture", Boolean.toString(fastCapture)).trim());
         hideGame = Boolean.parseBoolean(p.getProperty("streaming.hideGame", Boolean.toString(hideGame)).trim());
         fullscreenStays = Boolean.parseBoolean(p.getProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays)).trim());
         vrInWorld = Boolean.parseBoolean(p.getProperty("vr.in_world", Boolean.toString(vrInWorld)).trim());
+        shaderBrightness = intValue(p, "screens.shaderBrightness", shaderBrightness, MIN_SHADER_BRIGHTNESS, MAX_SHADER_BRIGHTNESS);
         borderStyle = enumValue(p, "border.style", borderStyle);
         borderColor = color(p.getProperty("border.color"), borderColor);
         borderThickness = intValue(p, "border.thickness", borderThickness, MIN_THICKNESS, MAX_THICKNESS);
@@ -224,10 +242,12 @@ final class DesktopConfig {
         p.setProperty("scaling", scaling.name());
         p.setProperty("view.framed", Boolean.toString(framed));
         p.setProperty("view.frameMargin", Integer.toString(frameMargin));
+        p.setProperty("view.keyHints", Boolean.toString(keyHints));
         p.setProperty("fastCapture", Boolean.toString(fastCapture));
         p.setProperty("streaming.hideGame", Boolean.toString(hideGame));
         p.setProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays));
         p.setProperty("vr.in_world", Boolean.toString(vrInWorld));
+        p.setProperty("screens.shaderBrightness", Integer.toString(shaderBrightness));
         p.setProperty("border.style", borderStyle.name());
         p.setProperty("border.color", hex(borderColor));
         p.setProperty("border.thickness", Integer.toString(borderThickness));

@@ -2,6 +2,11 @@ package com.desktopscreens.mixin;
 
 import com.desktopscreens.client.ScreenBuilderClient;
 import com.desktopscreens.client.WatchChoices;
+//? if >=26.3 {
+/*import com.desktopscreens.client.Awake;
+import com.mojang.blaze3d.platform.FramerateLimitTracker;
+import org.spongepowered.asm.mixin.injection.Redirect;
+*///?}
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,4 +36,13 @@ abstract class MinecraftMixin {
     private void desktopscreens$keepAttacking(boolean leftClick, CallbackInfo ci) {
         if (leftClick && ScreenBuilderClient.holdAttack()) ci.cancel();
     }
+
+    //? if >=26.3 {
+    /*/^* 26.3 slows an unfocused fullscreen game as if minimized, also while it's in sight and in use ({@link Awake#framerateLimit}). ^/
+    @Redirect(method = "renderFrame", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/platform/FramerateLimitTracker;getFramerateLimit()I"))
+    private int desktopscreens$framerateLimit(FramerateLimitTracker tracker) {
+        return Awake.framerateLimit((Minecraft) (Object) this, tracker, tracker.getFramerateLimit());
+    }
+    *///?}
 }

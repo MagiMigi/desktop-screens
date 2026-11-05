@@ -259,6 +259,21 @@ public final class Win32 {
         return U32.I.IsIconic(hwnd(window));
     }
 
+    /** Whether the window is kept above normal windows (WS_EX_TOPMOST), as the game is in the see-through view. */
+    public static boolean topmost(long window) {
+        return (User32.INSTANCE.GetWindowLong(hwnd(window), User32.GWL_EXSTYLE) & 0x8) != 0;
+    }
+
+    /** Whether the window still exists (it wasn't closed). */
+    public static boolean exists(long window) {
+        return window != 0 && User32.INSTANCE.IsWindow(hwnd(window));
+    }
+
+    /** Brings the window to the front with the keyboard focus ({@link #forceForeground}). */
+    public static void focus(long window) {
+        forceForeground(hwnd(window));
+    }
+
     /**
      * Whether any part of the window, as it shows ({@link #visibleFrame}), is on the monitor. With the invisible resize
      * borders a maximized game was "on" the next monitor too, and hid from capture while that one was shown (2026-10-30).

@@ -441,6 +441,12 @@ public final class DesktopScreen extends Screen {
                 }));
         view.setTooltip(Tooltip.create(Component.translatable("desktopscreens.settings.view.tooltip", DesktopClient.hostKeyName())));
         y += 22;
+        // On the main page, where a player tired of the banner looks first. With every optional row below (shader
+        // brightness and VR screens), the panel still ends at 238, inside VR's 240.
+        addRenderableWidget(CycleButton.onOffBuilder(DesktopConfig.keyHints)
+                .withTooltip(value -> Tooltip.create(Component.translatable(DesktopClient.vr("desktopscreens.settings.key_hints.tooltip"))))
+                .create(x, y, w, 20, Component.translatable("desktopscreens.settings.key_hints"), (button, value) -> DesktopConfig.keyHints = value));
+        y += 22;
         // The streaming page shares this row, as picture-in-picture's does "Use the desktop": there's no room for another.
         int streamWidth = 50;
         addRenderableWidget(CycleButton.onOffBuilder(DesktopConfig.fastCapture)
@@ -479,6 +485,15 @@ public final class DesktopScreen extends Screen {
             use.setTooltip(Tooltip.create(Component.translatable("desktopscreens.settings.use_desktop.needs_tablet")));
         }
         y += 22;
+        // Only where it does something, like the VR row below: while a shader pack is on (Iris or Oculus), which lights
+        // the pictures on screens as fully lit (PictureRenderType.tint). Each player's own: it depends on their pack.
+        if (PictureRenderType.dims()) {
+            IntSlider brightness = addRenderableWidget(new IntSlider(x, y, w, 20, "desktopscreens.settings.shader_brightness",
+                    DesktopConfig.MIN_SHADER_BRIGHTNESS, DesktopConfig.MAX_SHADER_BRIGHTNESS, DesktopConfig.shaderBrightness,
+                    value -> DesktopConfig.shaderBrightness = value));
+            brightness.setTooltip(Tooltip.create(Component.translatable("desktopscreens.settings.shader_brightness.tooltip")));
+            y += 22;
+        }
         // Only where it does something: in VR with controllers, and with the test switch.
         if (VrMode.vrActive() || VrMode.testing()) {
             addRenderableWidget(CycleButton.booleanBuilder(Component.translatable("desktopscreens.settings.vr_screens.world"),
@@ -1087,7 +1102,7 @@ public final class DesktopScreen extends Screen {
         long now = Util.getMillis();
         if (now < flashUntil + FADE_MILLIS) {
             drawBanner(g, 8, 0xFFFFFF, fade(now, flashUntil), flash);
-        } else if (now < hintUntil + FADE_MILLIS) {
+        } else if (DesktopConfig.keyHints && now < hintUntil + FADE_MILLIS) { // Off: only the replies above
             int alpha = fade(now, hintUntil);
             Component scaling = DesktopConfig.scaling.label();
             Component controlling = Component.translatable("desktopscreens.hint.controlling", shorten(session.sourceLabel()));

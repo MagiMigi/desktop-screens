@@ -27,6 +27,7 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 - **Its own picture on every screen:** each screen can show a different monitor or just one window.
 - **Sharing:** add friends by name; they see your screen and hear your PC near it (never Minecraft, nor your voice chat unless the screen shows its window).
 - **Picture-in-picture:** a window, small in a corner while you play (with a tablet in your inventory).
+- **Shader packs:** screens work with Iris (and Oculus on Forge 1.20.1), with a brightness slider in the settings while a shader pack is on. Not on 1.12.2.
 
 ## Keys
 
@@ -34,7 +35,7 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 - **Right Ctrl** (tap): back to the game. So does switching to Minecraft (Alt+Tab or its taskbar button).
 - **Right Ctrl + M:** next monitor. **+ W:** just the window under the mouse. **+ O:** settings. **+ P:** pin a window for picture-in-picture. **+ F:** framed view. **+ S:** scaling. **+ mouse wheel** (or Up/Down): zoom (these three for the desktop view of another monitor).
 
-Right Ctrl belongs to the mod while you use the desktop; use Left Ctrl for shortcuts in your apps. Every key can be changed in Controls, under "Desktop Screens".
+Right Ctrl belongs to the mod while you use the desktop; use Left Ctrl for shortcuts in your apps. Every key can be changed in Controls, under "Desktop Screens". The keys show at the top each time you start using the desktop; "Key hints" in the settings turns that off.
 
 ## VR (Vivecraft)
 

@@ -233,10 +233,11 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
     private static void quad(Matrix4f m, VertexConsumer out, int col, int row, float[] glass, float z,
                              float u0, float u1, float vTop, float vBottom) {
         float xLeft = 1 - (glass[0] - col), xRight = 1 - (glass[1] - col), yBottom = glass[2] - row, yTop = glass[3] - row;
-        Vertices.posUv(out, m, xLeft, yBottom, z, u0, vBottom);
-        Vertices.posUv(out, m, xRight, yBottom, z, u1, vBottom);
-        Vertices.posUv(out, m, xRight, yTop, z, u1, vTop);
-        Vertices.posUv(out, m, xLeft, yTop, z, u0, vTop);
+        int tint = PictureRenderType.tint();
+        Vertices.picture(out, m, xLeft, yBottom, z, u0, vBottom, tint);
+        Vertices.picture(out, m, xRight, yBottom, z, u1, vBottom, tint);
+        Vertices.picture(out, m, xRight, yTop, z, u1, vTop, tint);
+        Vertices.picture(out, m, xLeft, yTop, z, u0, vTop, tint);
     }
 
     /** The blockstate's y rotation of the model for a facing: north 0, east 90, south 180, west 270. */

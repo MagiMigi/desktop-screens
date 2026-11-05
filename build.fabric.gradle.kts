@@ -135,6 +135,28 @@ if (claims != null) {
     }
 }
 
+// Iris and Sodium in our own test game, to see how screens look with a shader pack (see IrisPrograms), where a version
+// lists them (deps.iris, deps.sodium). The shader pack goes in runs/<version>-fabric/client/shaderpacks.
+//   gradlew :1.20.1-fabric:runClient -Pshaders=iris
+// Only then, and never in the mod's jar. As above, Loom leaves out the jars mods carry inside: Iris's libraries are
+// added by hand (glsl-transformer, ANTLR, jcpp; checked in Iris 1.7.6's jar, 2026-11-05). The Fabric API parts both
+// carry are in our test game already.
+// -Pshaders=sodium: Sodium alone, to tell its doing from Iris's.
+val shaders = findProperty("shaders") as String?
+if (shaders != null && shaders != "iris" && shaders != "sodium") throw GradleException("-Pshaders=iris or -Pshaders=sodium, not '$shaders'")
+// Every version's build reads -Pshaders; the ones that list no Iris skip it, as -Pclaims=flan does.
+if (shaders != null) runCatching { prop("deps.iris") }.getOrNull()?.let { iris ->
+    dependencies {
+        modLocalRuntime("maven.modrinth:sodium:${prop("deps.sodium")}") { isTransitive = false }
+        if (shaders == "iris") {
+            modLocalRuntime("maven.modrinth:iris:$iris") { isTransitive = false }
+            localRuntime("io.github.douira:glsl-transformer:2.0.1")
+            localRuntime("org.antlr:antlr4-runtime:4.13.1")
+            localRuntime("org.anarres:jcpp:1.4.14")
+        }
+    }
+}
+
 loom {
     runs {
         named("client") {
@@ -150,6 +172,9 @@ loom {
             programArguments.addAll("--username", player)
             // The VR panel view without a headset, the mouse as the laser: gradlew :1.21.1-fabric:runClient -PvrTest.
             if (hasProperty("vrTest")) property("desktopscreens.vrPanelTest", "true")
+            // Sodium 0.5 (1.20.1) wants LWJGL 3.3.1 exactly and stops the game otherwise; Loom's test game has 3.3.2
+            // (2026-11-05). Players' launchers bring 3.3.1. Its own switch for that check (BugChecks, issue 2561):
+            if (shaders != null) property("sodium.checks.issue2561", "false")
         }
         // Start it with tools/server.cmd, which sets it up for the dev client first.
         named("server") {

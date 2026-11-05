@@ -46,9 +46,10 @@ final class DesktopScreen extends GuiScreen {
 
     /**
      * SHARING is a page of the settings: whom a screen in the world is shared with (only when opened from one). PIP is
-     * picture-in-picture's page, STREAM whether Discord and OBS may lose the game.
+     * picture-in-picture's page, STREAM whether Discord and OBS may lose the game. BORDER: the border's thickness, color
+     * and rainbow speed, on a page of their own since the Key hints row (2026-11-05), as in the other versions.
      */
-    private enum Mode { DESKTOP, SETTINGS, SHARING, PIP, STREAM }
+    private enum Mode { DESKTOP, SETTINGS, SHARING, PIP, STREAM, BORDER }
 
     private final DesktopSession session;
     private final GuiScreen parent; // where closing goes; null = back to the game
@@ -159,6 +160,7 @@ final class DesktopScreen extends GuiScreen {
         if (mode == Mode.SETTINGS) addSettingsWidgets();
         else if (mode == Mode.STREAM) addStreamWidgets();
         else if (mode == Mode.PIP) addPipWidgets();
+        else if (mode == Mode.BORDER) addBorderWidgets();
         else if (mode == Mode.SHARING) sharingPage.addWidgets(buttonList::add, fontRenderer, PAD, PANEL_WIDTH - 2 * PAD, height);
     }
 
@@ -424,6 +426,11 @@ final class DesktopScreen extends GuiScreen {
                     if (value > 0) DesktopConfig.frameMargin = value;
                 })).tooltip(new TextComponentTranslation("desktopscreens.settings.view.tooltip", DesktopClient.hostKeyName()));
         y += 22;
+        // On the main page, where a player tired of the banner looks first.
+        add(new Widget.Cycle<>(x, y, w, new TextComponentTranslation("desktopscreens.settings.key_hints"), () -> Arrays.asList(true, false),
+                DesktopScreen::onOff, DesktopConfig.keyHints, value -> DesktopConfig.keyHints = value))
+                .tooltip(new TextComponentTranslation("desktopscreens.settings.key_hints.tooltip"));
+        y += 22;
         // The streaming page shares this row: there's no room for another.
         int streamWidth = 50;
         add(new Widget.Cycle<>(x, y, w - streamWidth - 2, new TextComponentTranslation("desktopscreens.settings.fast_capture"),
@@ -434,18 +441,55 @@ final class DesktopScreen extends GuiScreen {
         add(new Widget.Button(x + w - streamWidth, y, streamWidth, new TextComponentTranslation("desktopscreens.settings.stream"),
                 () -> switchTo(Mode.STREAM))).tooltip(new TextComponentTranslation("desktopscreens.settings.stream.tooltip"));
         y += 22;
+        // The border's thickness, color and rainbow speed have a page of their own, which made room for Key hints: the
+        // panel must still fit a maximized 1080p window at GUI scale 4 (about 254 units tall), and ended at 251.
+        int editWidth = 50;
+        addBorderStyle(x, y, w - editWidth - 2, false);
+        add(new Widget.Button(x + w - editWidth, y, editWidth, new TextComponentTranslation("desktopscreens.settings.border_edit"),
+                () -> switchTo(Mode.BORDER))).tooltip(new TextComponentTranslation("desktopscreens.settings.border_edit.tooltip"));
+        y += 22;
+
+        // Picture-in-picture's page shares this row: a narrow button, so "Use the desktop" keeps room for its words.
+        int pipWidth = 50;
+        Widget use = add(new Widget.Button(x, y, w - pipWidth - 2, new TextComponentTranslation("desktopscreens.settings.use_desktop"),
+                () -> switchTo(Mode.DESKTOP)));
+        add(new Widget.Button(x + w - pipWidth, y, pipWidth, new TextComponentTranslation("desktopscreens.settings.pip"), () -> switchTo(Mode.PIP)))
+                .tooltip(new TextComponentTranslation("desktopscreens.settings.pip.tooltip"));
+        // Like G: back to where the settings were opened from, or with a tablet on you (not from the mods list alone).
+        if (!cameFromDesktop && screen == null && !DesktopClient.hasTablet(mc)) {
+            use.enabled = false;
+            use.tooltip(new TextComponentTranslation("desktopscreens.settings.use_desktop.needs_tablet"));
+        }
+        y += 22;
+        if (screen != null) {
+            // Opened from a screen in the world (yours, or G wouldn't use it): sharing it shares this row with Done.
+            int half = (w - 2) / 2;
+            add(new Widget.Button(x, y, half, new TextComponentTranslation("desktopscreens.settings.sharing", SharingPage.count(mc, screen)),
+                    () -> switchTo(Mode.SHARING))).tooltip(new TextComponentTranslation("desktopscreens.settings.sharing.tooltip"));
+            add(new Widget.Button(x + w - half, y, half, new TextComponentTranslation("gui.done"), this::close));
+        } else {
+            add(new Widget.Button(x, y, w, new TextComponentTranslation("gui.done"), this::close));
+        }
+    }
+
+    /** The border's style, on the settings and on its page ({@code onPage}: greys out what doesn't apply there). */
+    private void addBorderStyle(int x, int y, int w, boolean onPage) {
         add(new Widget.Cycle<>(x, y, w, new TextComponentTranslation("desktopscreens.settings.border"), () -> Arrays.asList(BorderStyle.values()),
                 BorderStyle::label, DesktopConfig.borderStyle, value -> {
                     DesktopConfig.borderStyle = value;
-                    updateActive();
+                    if (onPage) updateActive();
                 }));
+    }
+
+    /** The border's page: its style, thickness, color (the label with the hex box, then the swatches) and rainbow speed. */
+    private void addBorderWidgets() {
+        int x = PAD, w = PANEL_WIDTH - 2 * PAD, y = 20;
+        addBorderStyle(x, y, w, true);
         y += 22;
         thicknessSlider = add(new Widget.Slider(x, y, w, value -> new TextComponentTranslation("desktopscreens.settings.thickness", value),
                 DesktopConfig.MIN_THICKNESS, DesktopConfig.MAX_THICKNESS, DesktopConfig.borderThickness, value -> DesktopConfig.borderThickness = value));
         y += 22;
-
-        // The label, with the hex box on the same row, then the swatches in one row: the panel must still fit a
-        // maximized 1080p window at GUI scale 4 (about 254 units tall).
+        // The label, with the hex box on the same row, then the swatches in one row.
         colorLabelY = y + 4;
         int hexWidth = 54;
         hexBox = new GuiTextField(0, fontRenderer, x + w - hexWidth + 1, y, hexWidth - 2, 16);
@@ -472,30 +516,8 @@ final class DesktopScreen extends GuiScreen {
         y += size + 4;
         rainbowSlider = add(new Widget.Slider(x, y, w, value -> new TextComponentTranslation("desktopscreens.settings.rainbow_speed", value),
                 DesktopConfig.MIN_RAINBOW_SECONDS, DesktopConfig.MAX_RAINBOW_SECONDS, DesktopConfig.rainbowSeconds, value -> DesktopConfig.rainbowSeconds = value));
-        y += 22;
-
-        // Picture-in-picture's page shares this row: a narrow button, so "Use the desktop" keeps room for its words.
-        int pipWidth = 50;
-        Widget use = add(new Widget.Button(x, y, w - pipWidth - 2, new TextComponentTranslation("desktopscreens.settings.use_desktop"),
-                () -> switchTo(Mode.DESKTOP)));
-        add(new Widget.Button(x + w - pipWidth, y, pipWidth, new TextComponentTranslation("desktopscreens.settings.pip"), () -> switchTo(Mode.PIP)))
-                .tooltip(new TextComponentTranslation("desktopscreens.settings.pip.tooltip"));
-        // Like G: back to where the settings were opened from, or with a tablet on you (not from the mods list alone).
-        if (!cameFromDesktop && screen == null && !DesktopClient.hasTablet(mc)) {
-            use.enabled = false;
-            use.tooltip(new TextComponentTranslation("desktopscreens.settings.use_desktop.needs_tablet"));
-        }
-        y += 22;
-        if (screen != null) {
-            // Opened from a screen in the world (yours, or G wouldn't use it): sharing it shares this row with Done.
-            int half = (w - 2) / 2;
-            add(new Widget.Button(x, y, half, new TextComponentTranslation("desktopscreens.settings.sharing", SharingPage.count(mc, screen)),
-                    () -> switchTo(Mode.SHARING))).tooltip(new TextComponentTranslation("desktopscreens.settings.sharing.tooltip"));
-            add(new Widget.Button(x + w - half, y, half, new TextComponentTranslation("gui.done"), this::close));
-        } else {
-            add(new Widget.Button(x, y, w, new TextComponentTranslation("gui.done"), this::close));
-        }
         updateActive();
+        add(new Widget.Button(x, height - 24, w, new TextComponentTranslation("gui.back"), () -> switchTo(Mode.SETTINGS)));
     }
 
     /**
@@ -626,7 +648,7 @@ final class DesktopScreen extends GuiScreen {
     protected void keyTyped(char typedChar, int keyCode) throws IOException {
         if (keyCode == Keyboard.KEY_ESCAPE) {
             // Escape steps back a page. While you use the desktop, the game doesn't get the keyboard at all.
-            if (mode == Mode.STREAM || mode == Mode.SHARING || mode == Mode.PIP) switchTo(Mode.SETTINGS);
+            if (mode == Mode.STREAM || mode == Mode.SHARING || mode == Mode.PIP || mode == Mode.BORDER) switchTo(Mode.SETTINGS);
             else if (mode == Mode.SETTINGS && cameFromDesktop) switchTo(Mode.DESKTOP);
             else close();
             return;
@@ -721,6 +743,8 @@ final class DesktopScreen extends GuiScreen {
             drawRect(0, 0, PANEL_WIDTH, height, 0xFF161616);
             if (mode == Mode.SETTINGS) {
                 fontRenderer.drawStringWithShadow(new TextComponentTranslation("desktopscreens.settings.title").getFormattedText(), PAD, 8, 0xFFFFFF);
+            } else if (mode == Mode.BORDER) {
+                fontRenderer.drawStringWithShadow(new TextComponentTranslation("desktopscreens.border.title").getFormattedText(), PAD, 8, 0xFFFFFF);
                 fontRenderer.drawStringWithShadow(new TextComponentTranslation("desktopscreens.settings.color").getFormattedText(), PAD, colorLabelY,
                         DesktopConfig.borderStyle == BorderStyle.SOLID ? 0xE0E0E0 : 0x707070);
             } else if (mode == Mode.STREAM || mode == Mode.PIP) {
@@ -774,7 +798,7 @@ final class DesktopScreen extends GuiScreen {
         long now = Minecraft.getSystemTime();
         if (now < flashUntil + FADE_MILLIS) {
             drawBanner(8, 0xFFFFFF, fade(now, flashUntil), flash);
-        } else if (now < hintUntil + FADE_MILLIS) {
+        } else if (DesktopConfig.keyHints && now < hintUntil + FADE_MILLIS) { // Off: only the replies above
             int alpha = fade(now, hintUntil);
             ITextComponent controlling = new TextComponentTranslation("desktopscreens.hint.controlling", shorten(session.sourceLabel()));
             if (session.inWorld()) {

@@ -82,6 +82,7 @@ if (claims != null) {
     dependencies {
         when (claims) {
             // Legacy Forge's remapping leaves out what a mod needs (and the jars it carries inside): listed by hand.
+            // (With -Pshaders too, MixinExtras is on the list twice; Gradle takes it once.)
             "ftb" -> {
                 modRuntimeOnly("dev.ftb.mods:ftb-chunks-forge:${prop("deps.ftb_chunks")}")
                 modRuntimeOnly("dev.ftb.mods:ftb-teams-forge:${prop("deps.ftb_teams")}")
@@ -91,6 +92,31 @@ if (claims != null) {
             }
             "opac" -> modRuntimeOnly("maven.modrinth:open-parties-and-claims:${prop("deps.opac")}")
             else -> throw GradleException("-Pclaims=ftb or -Pclaims=opac, not '$claims'")
+        }
+    }
+}
+
+// Oculus (Iris for Forge) and Embeddium in our own test game, to see how screens look with a shader pack (see
+// IrisPrograms). The shader pack goes in runs/<version>-forge/client/shaderpacks.
+//   gradlew :1.20.1-forge:runClient -Pshaders=iris
+// Only then, and never in the mod's jar. As above, the jars they carry inside are listed by hand (checked in their
+// jars, 2026-11-05): jcpp in Oculus, MixinExtras in Embeddium.
+// -Pshaders=sodium: Embeddium alone (Sodium for Forge), to tell its doing from Oculus's.
+val shaders = findProperty("shaders") as String?
+if (shaders != null && shaders != "iris" && shaders != "sodium") throw GradleException("-Pshaders=iris or -Pshaders=sodium, not '$shaders'")
+if (shaders != null) {
+    repositories {
+        exclusiveContent {
+            forRepository { maven("https://api.modrinth.com/maven") { name = "Modrinth" } }
+            filter { includeGroup("maven.modrinth") }
+        }
+    }
+    dependencies {
+        modRuntimeOnly("maven.modrinth:embeddium:${prop("deps.embeddium")}")
+        runtimeOnly("io.github.llamalad7:mixinextras-forge:${prop("deps.mixinextras")}")
+        if (shaders == "iris") {
+            modRuntimeOnly("maven.modrinth:oculus:${prop("deps.oculus")}")
+            runtimeOnly("org.anarres:jcpp:1.4.14")
         }
     }
 }

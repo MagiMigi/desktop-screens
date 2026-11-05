@@ -29,11 +29,15 @@ final class FullscreenFocus {
  * this does it instead, every tick. Not while a desktop view is open: {@link FocusHandOff} keeps the game up then,
  * whatever gets the focus. Off with {@link DesktopConfig#fullscreenStays}. Alt+Tab first gives the focus to Windows'
  * own switcher, on the main monitor; that changes nothing ({@link Win32.Front#PICKING}), the window picked decides
- * (2026-10-03: Alt+Tab to a window on monitor 2 minimized the game before).
+ * (2026-10-03: Alt+Tab to a window on monitor 2 minimized the game before). And a window Windows picks by itself, after
+ * the one in front was minimized or closed, isn't the player's choice: the game stays and takes the focus back
+ * (2026-11-05: minimizing an app on monitor 2 handed the focus to a terminal behind the game, which minimized).
  */
 final class FullscreenFocus {
     /** What was in front last tick while the game didn't have the focus, so each change is acted on (and logged) once. */
     private static Win32.Front last = Win32.Front.GAME;
+    /** The other window that had the focus before the one in front now (0: the game, or none yet). */
+    private static long before, now;
     /**
      * The desktop window in front and whether it was clicked on the game's monitor: decided when it came to the front,
      * by where the mouse was then. Asked again every tick, a click on the desktop of monitor 2 minimized the game once
@@ -57,14 +61,20 @@ final class FullscreenFocus {
         if (!stays || FocusHandOff.active() || !mc.getWindow().isFullscreen() || mc.isWindowActive()) {
             last = Win32.Front.GAME;
             desktop = 0;
+            before = now = 0;
             return;
         }
         long hwnd = GLFWNativeWin32.glfwGetWin32Window(window);
         Monitor monitor = Monitors.of(hwnd);
         if (monitor == null || Win32.minimized(hwnd)) return;
+        long fg = Win32.foregroundWindow();
         Win32.Front front = Win32.front(hwnd, monitor);
+        // Windows' own switcher only passes the focus on (Alt+Tab): not a window the player was in.
+        if (fg != now && fg != 0 && fg != hwnd && front != Win32.Front.PICKING) {
+            before = now;
+            now = fg;
+        }
         if (front == Win32.Front.DESKTOP) {
-            long fg = Win32.foregroundWindow();
             if (fg != desktop) {
                 desktop = fg;
                 int[] c = Win32.cursorPos();
@@ -76,7 +86,14 @@ final class FullscreenFocus {
         }
         if (front == last) return;
         last = front;
-        if (front == Win32.Front.SAME_MONITOR) {
+        if (front == Win32.Front.SAME_MONITOR && before != 0 && (Win32.minimized(before) || !Win32.exists(before))) {
+            // Windows picked it, hidden behind the game: the player only put away the window they were in.
+            DesktopScreens.LOG.info("Fullscreen: the window in front was minimized or closed, and Windows gave the focus to {} behind the game, so the game takes it back",
+                    Win32.frontName());
+            Win32.focus(hwnd);
+            last = Win32.Front.GAME;
+            before = now = 0;
+        } else if (front == Win32.Front.SAME_MONITOR) {
             DesktopScreens.LOG.info("Fullscreen: {} got the focus on the game's monitor, so the game minimizes, as Minecraft does", Win32.frontName());
             GLFW.glfwIconifyWindow(window);
         } else if (front == Win32.Front.OTHER_MONITOR) {

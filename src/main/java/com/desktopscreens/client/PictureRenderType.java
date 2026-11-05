@@ -15,6 +15,7 @@ import com.mojang.blaze3d.textures.FilterMode;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 *///?} else {
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.RenderStateShard;
 import java.util.List;
 //?}
@@ -34,42 +35,63 @@ import net.minecraft.resources.ResourceLocation;
 //? if >=26.2 {
 /*final class PictureRenderType {
     /^*
-     * Minecraft's plain textured shader, front side only, pulled toward the viewer as the cracks of a block being broken are.
-     * 26.2 turned depth around (near is 1, far is 0), and the test and the pull with it.
+     * Minecraft's textured shader with a vertex color ({@link #tint}), front side only, pulled toward the viewer as the
+     * cracks of a block being broken are. 26.2 turned depth around (near is 1, far is 0), and the test and the pull with it.
      ^/
     private static final RenderPipeline PIPELINE = RenderPipeline.builder()
             .withLocation(DesktopScreens.id("pipeline/picture"))
-            .withVertexShader("core/position_tex")
-            .withFragmentShader("core/position_tex")
+            .withVertexShader("core/position_tex_color")
+            .withFragmentShader("core/position_tex_color")
             .withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
             .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
             .withColorTargetState(ColorTargetState.DEFAULT) // 26.2 assumed it; 26.3 draws no color without one
             .withCull(true)
-            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX)
+            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
             .withPrimitiveTopology(PrimitiveTopology.QUADS)
             .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, true, 1.0F, 10.0F))
             .build();
 
+    static {
+        IrisPrograms.assign(PIPELINE, "the screen picture", IrisPrograms.PICTURE);
+    }
+
     private PictureRenderType() {}
 
     static RenderType of(ResourceLocation texture) {
         return RenderType.create("desktopscreens_picture_" + texture.getPath().replace('/', '_'), RenderSetup.builder(PIPELINE)
                 .withTexture("Sampler0", texture, () -> RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true))
                 .createRenderSetup());
+    }
+
+    /^* The color every corner of a picture gets: white, or dimmed while a shader pack is on ({@link IrisPrograms#tint}). ^/
+    static int tint() {
+        return IrisPrograms.tint();
+    }
+
+    /^* Whether pictures are dimmed right now (a shader pack is on), so the brightness setting does something. ^/
+    static boolean dims() {
+        return IrisPrograms.shaderPackInUse();
     }
 }
 *///?} else if >=26.1 {
 /*final class PictureRenderType {
-    /^* Minecraft's plain textured shader, front side only, pulled toward the viewer as the cracks of a block being broken are. ^/
+    /^*
+     * Minecraft's textured shader with a vertex color ({@link #tint}), front side only, pulled toward the viewer as the
+     * cracks of a block being broken are.
+     ^/
     private static final RenderPipeline PIPELINE = RenderPipeline.builder(RenderPipelines.MATRICES_PROJECTION_SNIPPET)
             .withLocation(DesktopScreens.id("pipeline/picture"))
-            .withVertexShader("core/position_tex")
-            .withFragmentShader("core/position_tex")
+            .withVertexShader("core/position_tex_color")
+            .withFragmentShader("core/position_tex_color")
             .withSampler("Sampler0")
             .withCull(true)
-            .withVertexFormat(DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS)
+            .withVertexFormat(DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS)
             .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, true, -1.0F, -10.0F))
             .build();
+
+    static {
+        IrisPrograms.assign(PIPELINE, "the screen picture", IrisPrograms.PICTURE);
+    }
 
     private PictureRenderType() {}
 
@@ -78,21 +100,47 @@ import net.minecraft.resources.ResourceLocation;
                 .withTexture("Sampler0", texture, () -> RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR, true))
                 .createRenderSetup());
     }
+
+    /^* The color every corner of a picture gets: white, or dimmed while a shader pack is on ({@link IrisPrograms#tint}). ^/
+    static int tint() {
+        return IrisPrograms.tint();
+    }
+
+    /^* Whether pictures are dimmed right now (a shader pack is on), so the brightness setting does something. ^/
+    static boolean dims() {
+        return IrisPrograms.shaderPackInUse();
+    }
 }
 *///?} else {
 final class PictureRenderType extends RenderType {
+    /**
+     * Minecraft's textured shader with a vertex color ({@link #tint}): Oculus and Iris light the plain one as fully lit,
+     * too bright (Test 73, 1.20.1 Forge with Oculus, 2026-11-05), so it's dimmed while a shader pack is on, as from 26.1.
+     */
+    private static final ShaderStateShard POSITION_TEX_COLOR_SHADER = new ShaderStateShard(GameRenderer::getPositionTexColorShader);
+
     private PictureRenderType(String name, Runnable setup, Runnable clear) {
-        super(name, DefaultVertexFormat.POSITION_TEX, VertexFormat.Mode.QUADS, 1536, false, false, setup, clear);
+        super(name, DefaultVertexFormat.POSITION_TEX_COLOR, VertexFormat.Mode.QUADS, 1536, false, false, setup, clear);
     }
 
     static RenderType of(ResourceLocation texture) {
         // In the order Minecraft's own render types set them up.
-        List<RenderStateShard> states = List.of(new TextureStateShard(texture, true, true), POSITION_TEX_SHADER, NO_TRANSPARENCY,
+        List<RenderStateShard> states = List.of(new TextureStateShard(texture, true, true), POSITION_TEX_COLOR_SHADER, NO_TRANSPARENCY,
                 LEQUAL_DEPTH_TEST, CULL, NO_LIGHTMAP, NO_OVERLAY, POLYGON_OFFSET_LAYERING, MAIN_TARGET, DEFAULT_TEXTURING,
                 COLOR_DEPTH_WRITE, DEFAULT_LINE);
         return new PictureRenderType("desktopscreens_picture_" + texture.getPath().replace('/', '_'),
                 () -> states.forEach(RenderStateShard::setupRenderState),
                 () -> states.forEach(RenderStateShard::clearRenderState));
+    }
+
+    /** The color every corner of a picture gets: white, or dimmed while a shader pack is on ({@link IrisPrograms#tint}). */
+    static int tint() {
+        return IrisPrograms.tint();
+    }
+
+    /** Whether pictures are dimmed right now (a shader pack is on), so the brightness setting does something. */
+    static boolean dims() {
+        return IrisPrograms.shaderPackInUse();
     }
 }
 //?}

@@ -90,4 +90,16 @@ final class Vertices {
         /*out.vertex(pose, x, y, z).uv(u, v).endVertex();
         *///?}
     }
+
+    /**
+     * A corner of a picture in the world ({@link PictureRenderType}), placed by {@code pose}: texture coordinates and a
+     * color ({@link PictureRenderType#tint}). Before 1.21 the elements go in the format's order (position, texture, color).
+     */
+    static void picture(VertexConsumer out, Matrix4f pose, float x, float y, float z, float u, float v, int argb) {
+        //? if >=1.21 {
+        out.addVertex(pose, x, y, z).setUv(u, v).setColor(argb);
+        //?} else {
+        /*out.vertex(pose, x, y, z).uv(u, v).color(argb).endVertex();
+        *///?}
+    }
 }

@@ -59,6 +59,12 @@ final class DesktopConfig {
     static boolean framed = false;
     /** How much world the framed view shows on each side, in percent of the window's shorter side. */
     static int frameMargin = 10;
+    /**
+     * The key hints at the top when you start using the desktop. Off, only the reply to a key just pressed and the
+     * warnings show. On by default, so new players learn the keys; one who knows them turns it off in the settings,
+     * where an annoyed player looks first (2026-11-05: the banner covered a full-size Chrome's tabs).
+     */
+    static boolean keyHints = true;
     /** DXGI Desktop Duplication (up to the monitor's refresh rate); off means GDI only (about 60 fps). */
     static boolean fastCapture = true;
     /**
@@ -145,6 +151,7 @@ final class DesktopConfig {
         scaling = enumValue(p, "scaling", scaling);
         framed = Boolean.parseBoolean(p.getProperty("view.framed", Boolean.toString(framed)).trim());
         frameMargin = intValue(p, "view.frameMargin", frameMargin, MIN_MARGIN, MAX_MARGIN);
+        keyHints = Boolean.parseBoolean(p.getProperty("view.keyHints", Boolean.toString(keyHints)).trim());
         fastCapture = Boolean.parseBoolean(p.getProperty("fastCapture", Boolean.toString(fastCapture)).trim());
         hideGame = Boolean.parseBoolean(p.getProperty("streaming.hideGame", Boolean.toString(hideGame)).trim());
         fullscreenStays = Boolean.parseBoolean(p.getProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays)).trim());
@@ -220,6 +227,7 @@ final class DesktopConfig {
         p.setProperty("scaling", scaling.name());
         p.setProperty("view.framed", Boolean.toString(framed));
         p.setProperty("view.frameMargin", Integer.toString(frameMargin));
+        p.setProperty("view.keyHints", Boolean.toString(keyHints));
         p.setProperty("fastCapture", Boolean.toString(fastCapture));
         p.setProperty("streaming.hideGame", Boolean.toString(hideGame));
         p.setProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays));

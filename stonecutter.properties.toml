@@ -24,6 +24,9 @@ deps.opac = "fabric-1.20.1-0.31.6"
 deps.ftb_chunks = "2001.3.8"
 deps.forge_config_api_port = "v8.0.3-1.20.1-Fabric"
 deps.flan = "1.20.1-1.11.16-fabric"
+# Iris and Sodium for a test game with shaders (-Pshaders=iris), the newest releases (2026-11-05).
+deps.iris = "1.7.6+1.20.1"
+deps.sodium = "mc1.20.1-0.5.13-fabric"
 
 [forge."1.20.1"]
 # https://files.minecraftforge.net
@@ -37,6 +40,9 @@ deps.ftb_teams = "2001.3.1"
 deps.ftb_library = "2001.2.9"
 deps.architectury = "9.2.14"
 deps.mixinextras = "0.4.1"
+# Oculus (Iris for Forge) and Embeddium for a test game with shaders (-Pshaders=iris), the newest releases (2026-11-05).
+deps.oculus = "1.20.1-1.8.0"
+deps.embeddium = "0.3.31+mc1.20.1"
 
 ["1.21.1"]
 java = "21"
@@ -73,6 +79,9 @@ deps.neoforge_loader_range = "[4,)"
 # Land-claim mods for our test game (-Pclaims=...).
 deps.opac = "neoforge-1.21.1-0.31.6"
 deps.ftb_chunks = "2101.1.22"
+# Iris and Sodium for a test game with shaders (-Pshaders=iris): the Iris All the Mods 10 runs (2026-11-05).
+deps.iris = "1.8.14-beta.1+1.21.1-neoforge"
+deps.sodium = "mc1.21.1-0.8.13-neoforge"
 
 ["26.1.2"]
 java = "25"
@@ -104,6 +113,9 @@ deps.neoforge_range = "[26.1.2.0,)"
 deps.neoforge_loader_range = "[1,)"
 deps.opac = "neoforge-26.1.2-0.31.6"
 deps.ftb_chunks = "26.1.2.8"
+# Iris and Sodium for a test game with shaders (-Pshaders=iris): the versions All the Mods 11 runs (2026-11-05).
+deps.iris = "1.11.4+26.1-neoforge"
+deps.sodium = "mc26.1.2-0.9.2-neoforge"
 
 ["26.2"]
 java = "25"
@@ -134,6 +146,9 @@ deps.neoforge_range = "[26.2.0.0,)"
 deps.neoforge_loader_range = "[1,)"
 deps.opac = "neoforge-26.2-0.31.6"
 deps.ftb_chunks = "26.1.2.8"
+# Iris and Sodium for a test game with shaders (-Pshaders=iris), the newest releases (2026-11-05).
+deps.iris = "1.11.4+26.2-neoforge"
+deps.sodium = "mc26.2-0.9.2-neoforge"
 
 ["26.3"]
 java = "25"
@@ -168,3 +183,6 @@ deps.neoforge_loader_range = "[1,)"
 deps.opac = "neoforge-26.3-0.31.6"
 deps.flan = "26.3-1.12.8-neoforge"
 deps.ftb_chunks = "26.1.2.8"
+# Iris and Sodium for a test game with shaders (-Pshaders=iris), the newest releases (2026-11-05).
+deps.iris = "1.11.7+26.3-neoforge"
+deps.sodium = "mc26.3-0.9.3-beta.1-neoforge"

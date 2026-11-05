@@ -64,6 +64,59 @@ tasks.compileJava {
 //   gradlew :26.3-neoforge:runClient -Pclaims=flan     Flan, where a version lists one (deps.flan)
 // Only then, and never in the mod's jar.
 val claims = findProperty("claims") as String?
+// Iris and Sodium in our own test game, to see how screens look with a shader pack (see IrisPrograms), where a
+// version lists them (deps.iris, deps.sodium). The shader pack goes in runs/<version>-neoforge/client/shaderpacks.
+//   gradlew :26.1.2-neoforge:runClient -Pshaders=iris
+//   gradlew :26.1.2-neoforge:runClient -Pshaders=iris -PirisProbe   the picture cycles through brightness levels
+// Only then, and never in the mod's jar.
+// -Pshaders=sodium: Sodium alone, to tell its doing from Iris's.
+val shaders = findProperty("shaders") as String?
+if (shaders != null && shaders != "iris" && shaders != "sodium") throw GradleException("-Pshaders=iris or -Pshaders=sodium, not '$shaders'")
+if (claims != null || shaders != null) {
+    repositories {
+        exclusiveContent {
+            forRepository { maven("https://api.modrinth.com/maven") { name = "Modrinth" } }
+            filter { includeGroup("maven.modrinth") }
+        }
+    }
+}
+// Every version's build reads -Pshaders; the ones that list no Iris skip it, as -Pclaims=flan does.
+if (shaders != null) runCatching { prop("deps.iris") }.getOrNull()?.let { iris ->
+    val sodium = "maven.modrinth:sodium:${prop("deps.sodium")}"
+    if (shaders == "iris") dependencies { runtimeOnly("maven.modrinth:iris:$iris") }
+    if (sc.current.parsed >= "26.1") {
+        dependencies { runtimeOnly(sodium) }
+    } else {
+        // Sodium's jar is a library (its early start-up classes, FMLModType: LIBRARY) with the real mod and four Fabric
+        // API parts inside. Players' games load both. NeoForge 21.1's test game took the library for the mod (it has a
+        // neoforge.mods.toml too) and never loaded the real one, so Iris found none of Sodium's classes and the game died
+        // while starting (2026-11-05). Here the inside jars are unpacked, and the library is kept without that file
+        // (the two share no package), on the test game's library path: as a runtimeOnly file the game never loaded it,
+        // and Sodium's mixins couldn't find Workarounds$Reference.
+        val sodiumJar = configurations.detachedConfiguration(dependencies.create(sodium)).apply { isTransitive = false }
+        val shaderMods = layout.buildDirectory.dir("shader-mods")
+        val unpackSodium = tasks.register<Sync>("unpackSodium") {
+            from(provider { zipTree(sodiumJar.singleFile) }) {
+                include("META-INF/jarjar/*.jar")
+                eachFile { path = name }
+            }
+            includeEmptyDirs = false
+            into(shaderMods.map { it.dir("inside") })
+        }
+        val sodiumLibrary = tasks.register<Zip>("sodiumLibrary") {
+            from(provider { zipTree(sodiumJar.singleFile) }) {
+                exclude("META-INF/neoforge.mods.toml", "META-INF/jarjar/**")
+            }
+            archiveFileName = "sodium-library.jar"
+            destinationDirectory = shaderMods
+        }
+        dependencies { runtimeOnly(fileTree(shaderMods.map { it.dir("inside") }) { include("*.jar") }.builtBy(unpackSodium)) }
+        // The neoForge block below creates that configuration.
+        configurations.matching { it.name == "additionalRuntimeClasspath" }.configureEach {
+            dependencies.add(project.dependencies.create(files(sodiumLibrary)))
+        }
+    }
+}
 if (claims != null) {
     repositories {
         exclusiveContent {
@@ -73,10 +126,6 @@ if (claims != null) {
         exclusiveContent {
             forRepository { maven("https://maven.architectury.dev") { name = "Architectury" } }
             filter { includeGroup("dev.architectury") }
-        }
-        exclusiveContent {
-            forRepository { maven("https://api.modrinth.com/maven") { name = "Modrinth" } }
-            filter { includeGroup("maven.modrinth") }
         }
     }
     dependencies {
@@ -108,6 +157,16 @@ neoForge {
             programArguments.addAll("--username", player)
             // The VR panel view without a headset, the mouse as the laser: gradlew :1.21.1-neoforge:runClient -PvrTest.
             if (hasProperty("vrTest")) systemProperty("desktopscreens.vrPanelTest", "true")
+            // With a shader pack on, the screen picture cycles through brightness levels (see IrisPrograms): -PirisProbe.
+            if (hasProperty("irisProbe")) systemProperty("desktopscreens.irisProbe", "true")
+            // With Iris, a test game stopped on Minecraft's draw checks, which only run outside a real game
+            // (GlRenderPass.VALIDATION): "Missing sampler Sampler1" on something Iris draws, not ours (2026-11-05).
+            // Players' games never check, so neither do these. 26.3 renamed the switch (FrontendGpuDevice.STRICT_VALIDATION):
+            // without it, Iris's shadow pass stopped the test game on "Index 1 out of bounds" (2026-11-05).
+            if (shaders != null) {
+                systemProperty("neoforge.disableGlValidation", "true")
+                systemProperty("neoforge.disableBlaze3DValidation", "true")
+            }
         }
         // Start it with tools/server.cmd, which sets it up for the dev client first.
         register("server") {
