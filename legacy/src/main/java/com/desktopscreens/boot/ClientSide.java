@@ -22,7 +22,9 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.InputEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 /**
@@ -48,6 +50,7 @@ public final class ClientSide extends Side {
             return;
         }
         TabletItem.onUseClient = client::tabletUsed;
+        TabletItem.shortcutClient = client::tabletShortcut;
         MinecraftForge.EVENT_BUS.register(new Events());
     }
 
@@ -82,6 +85,12 @@ public final class ClientSide extends Side {
         @SubscribeEvent
         public void tick(TickEvent.ClientTickEvent event) {
             if (event.phase == TickEvent.Phase.END) client.tick();
+        }
+
+        /** Ahead of the other mods: there's nothing like a mixin here to stop a key press before their bindings get it. */
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
+        public void key(InputEvent.KeyInputEvent event) {
+            client.keyInput();
         }
 
         @SubscribeEvent

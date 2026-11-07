@@ -107,6 +107,11 @@ final class DesktopSession {
             }
 
             @Override
+            public void onWindowChosen(AppWindow window) {
+                DesktopClient.onWindowChosen(window);
+            }
+
+            @Override
             public void onHostCombo(int virtualKey) {
                 DesktopClient.onHostCombo(virtualKey);
             }
@@ -186,6 +191,24 @@ final class DesktopSession {
      * the view had it, and gives the window the keyboard.
      */
     void setWindow(AppWindow w) {
+        setWindow(w, true);
+    }
+
+    /**
+     * You switched to this window yourself while one window is shown (Alt+Tab, its taskbar button): it shows instead, where
+     * it is and at its own size. It has the keyboard already, maybe through a dialog of its own in front of it.
+     */
+    void switchedTo(AppWindow w) {
+        setWindow(w, false);
+    }
+
+    /** Instead of {@link #switchedTo}: the window shown stays, and this one comes over it, as a new window does. */
+    void comeOver(AppWindow w) {
+        DesktopScreens.LOG.info("Still showing one window ({}): {} was switched to, and comes over it", window, w);
+        input.comeOver(w);
+    }
+
+    private void setWindow(AppWindow w, boolean giveKeyboard) {
         window = w;
         windowArea = null;
         menuArea.reset();
@@ -199,7 +222,7 @@ final class DesktopSession {
         choice.changed();
         // The picture is cut from the monitor, so whatever covers the window shows. The handover below brings it to
         // the front; the VR panel has none, so it comes forward here, as a click on it would (2026-10-30).
-        if (w != null && panelControl) InjectedInput.bringForward(w.handle());
+        if (giveKeyboard && w != null && panelControl) InjectedInput.bringForward(w.handle());
         if (on != null) {
             setTarget(on); // restarts the input, which gives the window the keyboard
             return;
@@ -207,7 +230,7 @@ final class DesktopSession {
         if (w != null) windowArea = windowAreaNow();
         if (input.isActive()) {
             input.show(w);
-            if (w != null) input.focus(w);
+            if (giveKeyboard && w != null) input.focus(w);
         }
     }
 
@@ -453,6 +476,7 @@ final class DesktopSession {
      */
     void startInput() {
         if (controlling()) return;
+        ComposedFullscreen.desktopUsed(mc); // first: the see-through view below starts from the window's new size
         if (inWorld) usingInWorld = this;
         if (panel) {
             // The picture must show the desktop behind the game window, and clicks there must reach it. Not with the

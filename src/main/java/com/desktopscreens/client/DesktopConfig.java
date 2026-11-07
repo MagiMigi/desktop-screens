@@ -81,6 +81,14 @@ final class DesktopConfig {
      * the config.
      */
     static boolean fullscreenStays = true;
+    /** The desktop has been used at least once in this game folder, so {@link ComposedFullscreen} applies. */
+    static boolean desktopUsed = false;
+    /**
+     * Whether {@link ComposedFullscreen} may keep the F11 window a pixel bigger once the desktop has been used, so using
+     * it doesn't flash. No button (most players never need it, and 1.12.2's panel is full);
+     * {@code fullscreen.composedAfterFirstUse} in the config, for whoever would rather have the game shown directly.
+     */
+    static boolean fullscreenComposed = true;
     /**
      * VR with controllers: "Use the screen" points at the screen in the world itself instead of showing the desktop on
      * Vivecraft's panel ({@link WorldPointing}). Off by default: the panel was there first and is tested more.
@@ -168,6 +176,8 @@ final class DesktopConfig {
         fastCapture = Boolean.parseBoolean(p.getProperty("fastCapture", Boolean.toString(fastCapture)).trim());
         hideGame = Boolean.parseBoolean(p.getProperty("streaming.hideGame", Boolean.toString(hideGame)).trim());
         fullscreenStays = Boolean.parseBoolean(p.getProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays)).trim());
+        desktopUsed = Boolean.parseBoolean(p.getProperty("desktop.used", Boolean.toString(desktopUsed)).trim());
+        fullscreenComposed = Boolean.parseBoolean(p.getProperty("fullscreen.composedAfterFirstUse", Boolean.toString(fullscreenComposed)).trim());
         vrInWorld = Boolean.parseBoolean(p.getProperty("vr.in_world", Boolean.toString(vrInWorld)).trim());
         shaderBrightness = intValue(p, "screens.shaderBrightness", shaderBrightness, MIN_SHADER_BRIGHTNESS, MAX_SHADER_BRIGHTNESS);
         borderStyle = enumValue(p, "border.style", borderStyle);
@@ -246,6 +256,8 @@ final class DesktopConfig {
         p.setProperty("fastCapture", Boolean.toString(fastCapture));
         p.setProperty("streaming.hideGame", Boolean.toString(hideGame));
         p.setProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays));
+        p.setProperty("desktop.used", Boolean.toString(desktopUsed));
+        p.setProperty("fullscreen.composedAfterFirstUse", Boolean.toString(fullscreenComposed));
         p.setProperty("vr.in_world", Boolean.toString(vrInWorld));
         p.setProperty("screens.shaderBrightness", Integer.toString(shaderBrightness));
         p.setProperty("border.style", borderStyle.name());

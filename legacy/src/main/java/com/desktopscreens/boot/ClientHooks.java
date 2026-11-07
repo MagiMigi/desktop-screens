@@ -17,6 +17,12 @@ public interface ClientHooks {
     /** The tablet was used (right-click), on the client. */
     void tabletUsed();
 
+    /** The shortcut that opens the desktop with a Tablet in the inventory now, for its tooltip: "G" or "Right Ctrl + G". */
+    String tabletShortcut();
+
+    /** A key went down or up, before other mods hear of it (see client/DesktopClient). */
+    void keyInput();
+
     /** The settings (for the mods list's config button), going back to {@code parent} when closed. */
     GuiScreen settingsScreen(GuiScreen parent);
 

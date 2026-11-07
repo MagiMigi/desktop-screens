@@ -29,6 +29,16 @@ public final class ClientMain implements ClientHooks {
     }
 
     @Override
+    public String tabletShortcut() {
+        return DesktopClient.tabletShortcut();
+    }
+
+    @Override
+    public void keyInput() {
+        DesktopClient.keyInput(Minecraft.getMinecraft());
+    }
+
+    @Override
     public GuiScreen settingsScreen(GuiScreen parent) {
         return DesktopClient.settingsScreen(parent);
     }

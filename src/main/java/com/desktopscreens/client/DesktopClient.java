@@ -4,6 +4,8 @@ import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.ScreenSharing;
 import com.desktopscreens.ShareStream;
 import com.desktopscreens.TabletItem;
+import com.desktopscreens.core.AppWindow;
+import com.desktopscreens.core.OpenKeyRule;
 import com.desktopscreens.core.Win32;
 //? if >=26.3 {
 /*import com.desktopscreens.core.UsbScancodes;
@@ -58,12 +60,19 @@ public final class DesktopClient {
 
     /** The tablet was used; open once the use button (right-click) is let go. */
     private static boolean tabletPending;
+    /** A press of {@link #OPEN_KEY} taken from the other bindings ({@link #onKey}), until a tick acts on it; else null. */
+    private static OpenKeyRule.Result keyTaken;
+    /** The key of that press: its repeats and release are kept from the game too. -1 for none. */
+    private static int keptKey = -1;
+    /** Whether the host key and F3 are down, as the game saw them ({@link #keySeen}). */
+    private static boolean hostHeld, debugHeld;
 
     private DesktopClient() {}
 
     /** Called once by each loader's client entry point. */
     public static void init() {
         TabletItem.onUseClient = () -> tabletPending = true;
+        TabletItem.shortcutClient = DesktopClient::tabletShortcut;
         ShareStream.client = new ShareStream.Client() {
             @Override
             public void status(ShareStream.Status status) {
@@ -109,6 +118,7 @@ public final class DesktopClient {
         WorldPointing.tick(mc);
         FocusHandOff.tick(mc);
         FullscreenFocus.tick(mc);
+        ComposedFullscreen.tick(mc);
         WorldScreens.tick(mc);
         LiveCapture.tickAll();
         LiveWindow.tickAll(mc);
@@ -125,24 +135,19 @@ public final class DesktopClient {
             SharingInfo.clear();
             LiveCapture.worldLeft();
         }
-        while (OPEN_KEY.consumeClick()) {
-            if (mc.screen != null) continue;
-            if (WorldPointing.active()) {
-                WorldPointing.stop("Use the screen again");
-                continue;
-            }
-            ScreenGroups.Group screen = ScreenAim.usable();
-            if (screen == null && VrMode.vrActive()) {
-                // Heuwyn's picks of "Use the screen" on Vivecraft's radial menu worked only every second time (2026-10-31),
-                // and Vivecraft lets go of the radial's hold by itself, so it's something else: say what's in the way.
-                DesktopScreens.LOG.info("Use the screen (VR): none of your screens that's on where your head points (it aims with the head){}{}",
-                        TriggerStart.aimed(mc) != null ? "; the laser is on one" : "", hasTablet(mc) ? "; opened the Tablet's desktop instead" : "");
-            }
-            if (screen != null) useScreen(mc, screen);
-            else if (hasTablet(mc)) openDesktop(mc);
-            // Else nothing, and quietly: the desktop comes with a tablet or a screen, not with the key alone
-            // (2026-09-25), and big packs often have G on something else too.
+        if (!mc.isWindowActive()) { // its keys' releases may never come
+            hostHeld = false;
+            debugHeld = false;
+            keptKey = -1;
         }
+        // A Tablet's desktop waits until the key is let go, as with its right-click: with the host key held, a key
+        // repeating into the desktop would be Ctrl + G for whichever app gets the focus.
+        if (keyTaken == OpenKeyRule.Result.SCREEN || keyTaken == OpenKeyRule.Result.TABLET && keptKey == -1) {
+            boolean tablet = keyTaken == OpenKeyRule.Result.TABLET;
+            keyTaken = null;
+            openKey(mc, tablet);
+        }
+        while (OPEN_KEY.consumeClick()) openKey(mc, tabletOnClick(mc));
         while (PIP_KEY.consumeClick()) {
             if (WorldPointing.active()) WorldPointing.onHostCombo(mc, 'P'); // pins the window under the cursor, as Right Ctrl + P
             else if (mc.screen == null) PictureInPicture.toggle(mc);
@@ -160,7 +165,95 @@ public final class DesktopClient {
         }
     }
 
-    /** Whether the player carries a tablet anywhere in their inventory (the off hand too), so G opens the desktop. */
+    /** "Use the desktop" was pressed: stops using a screen, uses the one looked at, or if {@code tablet}, a Tablet's desktop. */
+    private static void openKey(Minecraft mc, boolean tablet) {
+        if (mc.screen != null) return;
+        if (WorldPointing.active()) {
+            WorldPointing.stop("Use the screen again");
+            return;
+        }
+        ScreenGroups.Group screen = ScreenAim.usable();
+        if (screen == null && VrMode.vrActive()) {
+            // Heuwyn's picks of "Use the screen" on Vivecraft's radial menu worked only every second time (2026-10-31),
+            // and Vivecraft lets go of the radial's hold by itself, so it's something else: say what's in the way.
+            DesktopScreens.LOG.info("Use the screen (VR): none of your screens that's on where your head points (it aims with the head){}{}",
+                    TriggerStart.aimed(mc) != null ? "; the laser is on one" : "", hasTablet(mc) ? "; opened the Tablet's desktop instead" : "");
+        }
+        if (screen != null) useScreen(mc, screen);
+        else if (tablet && hasTablet(mc)) openDesktop(mc);
+        // Else nothing, and quietly: the desktop comes with a tablet or a screen, not with the key alone
+        // (2026-09-25), and big packs often have G on something else too.
+    }
+
+    /**
+     * Whether a click of the key that {@link #onKey} left alone can open a Tablet's desktop: in VR, as it always did; and
+     * with the key on a mouse button, which never passes through there.
+     */
+    private static boolean tabletOnClick(Minecraft mc) {
+        return VrMode.vrActive() || InputConstants.getKey(OPEN_KEY.saveString()).getType() != InputConstants.Type.KEYSYM && openKeyFree(mc);
+    }
+
+    /** Every key the game gets, before anything else, so the host key and F3 are known to be held. Game thread. */
+    public static void keySeen(int key, int action) {
+        boolean down = action != InputConstants.RELEASE;
+        if (key == InputConstants.KEY_F3) debugHeld = down;
+        // As everywhere: Right Ctrl when the host key can't be used (see hostScancode).
+        if (hostScancode() <= 0 ? key == InputConstants.KEY_RCONTROL : isHostKey(key)) hostHeld = down;
+    }
+
+    /**
+     * A key, before any binding hears of it: true if it's kept from them, because the press of "Use the desktop" is ours
+     * alone ({@link OpenKeyRule}). Then the next tick acts on it, and its repeats and release are kept too. Game thread.
+     */
+    public static boolean onKey(int key, int action) {
+        if (action != InputConstants.PRESS) {
+            if (key != keptKey) return false;
+            if (action == InputConstants.RELEASE) keptKey = -1;
+            return true;
+        }
+        if (key == keptKey) keptKey = -1; // pressed again: its last release never came
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null || mc.screen != null) return false;
+        if (!WorldPointing.bound(OPEN_KEY, InputConstants.Type.KEYSYM, key)) return false;
+        OpenKeyRule.Result result = OpenKeyRule.press(debugHeld, WorldPointing.active() || ScreenAim.usable() != null, hasTablet(mc),
+                hostHeld, openKeyFree(mc), VrMode.vrActive());
+        if (result == OpenKeyRule.Result.PASS) return false;
+        keyTaken = result;
+        keptKey = key;
+        return true;
+    }
+
+    /**
+     * Whether no other mod reacts to the key of "Use the desktop" while playing, whatever is open right now (the Tablet's
+     * tooltip asks from a menu). On NeoForge and Forge, a binding only for menus or one that needs Ctrl, Shift or Alt with
+     * the key doesn't react to it there.
+     */
+    private static boolean openKeyFree(Minecraft mc) {
+        for (KeyMapping other : mc.options.keyMappings) {
+            if (other == OPEN_KEY || !OpenKeyRule.countsAsOther(other.getName())) continue;
+            //? if neoforge {
+            boolean reacts = other.getKey().equals(OPEN_KEY.getKey())
+                    && other.getKeyModifier() == net.neoforged.neoforge.client.settings.KeyModifier.NONE
+                    && other.getKeyConflictContext().conflicts(net.neoforged.neoforge.client.settings.KeyConflictContext.IN_GAME);
+            //?} else if forge {
+            /*boolean reacts = other.getKey().equals(OPEN_KEY.getKey())
+                    && other.getKeyModifier() == net.minecraftforge.client.settings.KeyModifier.NONE
+                    && other.getKeyConflictContext().conflicts(net.minecraftforge.client.settings.KeyConflictContext.IN_GAME);
+            *///?} else {
+            /*boolean reacts = other.same(OPEN_KEY);
+            *///?}
+            if (reacts) return false;
+        }
+        return true;
+    }
+
+    /** The shortcut that opens the desktop with a Tablet in the inventory now, for the Tablet's tooltip: "G" or "Right Ctrl + G". */
+    private static Component tabletShortcut() {
+        if (VrMode.vrActive() || openKeyFree(Minecraft.getInstance())) return keyName(OPEN_KEY);
+        return Component.translatable("desktopscreens.key.together", hostKeyName(), keyName(OPEN_KEY));
+    }
+
+    /** Whether the player carries a tablet anywhere in their inventory (the off hand too), which the shortcut needs. */
     static boolean hasTablet(Minecraft mc) {
         if (mc.player == null) return false;
         Inventory inventory = mc.player.getInventory();
@@ -373,6 +466,15 @@ public final class DesktopClient {
         mc.execute(() -> {
             if (mc.screen instanceof DesktopScreen screen) screen.onGameChosen();
             else if (WorldPointing.active()) WorldPointing.stop("Minecraft was switched to (Alt+Tab or its taskbar button)");
+        });
+    }
+
+    /** You switched to another window yourself while just one window is shown. Input hook thread. */
+    static void onWindowChosen(AppWindow window) {
+        Minecraft mc = Minecraft.getInstance();
+        mc.execute(() -> {
+            if (mc.screen instanceof DesktopScreen screen) screen.onWindowChosen(window);
+            else if (WorldPointing.active()) WorldPointing.onWindowChosen(mc, window);
         });
     }
 

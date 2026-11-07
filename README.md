@@ -23,15 +23,15 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 
 - **Screens:** thin panels for walls, floors and ceilings. Side by side they join into one big screen. Right-click one with an empty hand to turn it on: it shows your desktop to you and anyone you share it with.
 - **Screen Builder:** builds a whole screen at once, up to 32 × 32 blocks, with a hologram that follows your view. Shift-click a screen to move it, resize it or take it down.
-- **Tablet:** right-click it, or press G while it's in your inventory.
+- **Tablet:** right-click it, or press G while it's anywhere in your inventory (Right Ctrl + G if another mod uses G; its tooltip tells you which).
 - **Its own picture on every screen:** each screen can show a different monitor or just one window.
 - **Sharing:** add friends by name; they see your screen and hear your PC near it (never Minecraft, nor your voice chat unless the screen shows its window).
 - **Picture-in-picture:** a window, small in a corner while you play (with a tablet in your inventory).
-- **Shader packs:** screens work with Iris (and Oculus on Forge 1.20.1), with a brightness slider in the settings while a shader pack is on. Not on 1.12.2.
+- **Shader packs:** screens work with Iris (and Oculus on Forge 1.20.1), with a brightness slider in the settings while a shader pack is on. Not on 1.12.2, and not yet on 26.3: Sodium's beta there, which Iris needs, doesn't draw screens (or chests and signs).
 
 ## Keys
 
-- **G:** use the screen you're looking at (or, with a tablet in your inventory, the desktop anywhere).
+- **G:** use the screen you're looking at. With a tablet in your inventory, the desktop anywhere; if another mod uses G, that's **Right Ctrl + G**.
 - **Right Ctrl** (tap): back to the game. So does switching to Minecraft (Alt+Tab or its taskbar button).
 - **Right Ctrl + M:** next monitor. **+ W:** just the window under the mouse. **+ O:** settings. **+ P:** pin a window for picture-in-picture. **+ F:** framed view. **+ S:** scaling. **+ mouse wheel** (or Up/Down): zoom (these three for the desktop view of another monitor).
 
@@ -44,6 +44,8 @@ With Vivecraft 1.3 or newer (every version except 1.12.2), point at your screen 
 ## For servers and modpacks
 
 - Nothing to install besides the jar (and Fabric API on Fabric; Mod Menu is optional).
+- Plays well with other mods' keys: while you look at a screen that's on, G belongs to the screen alone. Anywhere else other mods keep it.
+- F11 stays as it is until a player first uses the desktop. After that the mod keeps the F11 window 1 px bigger than the monitor, so the game doesn't flash when the desktop opens or closes (`fullscreen.composedAfterFirstUse=false` in `config/desktopscreens.properties` turns that off).
 - The Screen Builder asks land-claim mods before it builds, moves or takes down a screen (tested with FTB Chunks, Open Parties and Claims and Flan; FTB Utilities on 1.12.2).
 - Recipes are data files. Server settings are in `config/desktopscreens-server.properties`: the biggest screen, the builder's range, and whether sharing (and its sound) is allowed, with limits for shared pictures.
 

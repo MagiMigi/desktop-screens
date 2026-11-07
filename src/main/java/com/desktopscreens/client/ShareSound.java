@@ -162,6 +162,7 @@ final class ShareSound {
         private int seq, silentFrames;
         private long statsFrom = System.nanoTime(), statsBytes, statsWork;
         private int statsSent, statsSilent;
+        private final RepeatingLog statsLog = new RepeatingLog();
 
         Sender(ClientPacketListener connection, int stream) {
             this.connection = connection;
@@ -223,7 +224,7 @@ final class ShareSound {
             long now = System.nanoTime();
             if (now - statsFrom < STATS_NANOS) return;
             double seconds = (now - statsFrom) / 1e9;
-            DesktopScreens.LOG.info("Sharing sound stream {} ({} screens): {} kbit/s, {} packets a second sent, {} silent ones held back, compressing took {} ms each",
+            statsLog.report(false, "Sharing sound stream {} ({} screens): {} kbit/s, {} packets a second sent, {} silent ones held back, compressing took {} ms each",
                     stream, screens.size(), String.format("%.1f", statsBytes * 8 / seconds / 1000), String.format("%.1f", statsSent / seconds),
                     String.format("%.1f", statsSilent / seconds), String.format("%.2f", statsWork / 1e6 / Math.max(1, statsSent)));
             statsFrom = now;

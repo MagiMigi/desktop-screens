@@ -18,6 +18,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * The tablet: right-click it to use your PC's desktop. Registered on both sides, so it must never touch client
@@ -27,6 +28,8 @@ public final class TabletItem extends Item {
     public static final String NAME = "tablet";
     /** Set by the client when it starts; null on a dedicated server. */
     public static volatile Runnable onUseClient;
+    /** The shortcut that opens it from the inventory now, which depends on the other mods' keys. Set like {@link #onUseClient}. */
+    public static volatile Supplier<String> shortcutClient;
 
     public TabletItem() {
         setRegistryName(DesktopScreens.MOD_ID, NAME);
@@ -46,9 +49,10 @@ public final class TabletItem extends Item {
     @SideOnly(Side.CLIENT)
     public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip, ITooltipFlag flag) {
         tooltip.add(TextFormatting.GRAY + I18n.format("item.desktopscreens.tablet.tooltip"));
+        Supplier<String> shortcut = shortcutClient;
         // A keybind component shows whatever key it's bound to now.
         tooltip.add(TextFormatting.DARK_GRAY + I18n.format("item.desktopscreens.tablet.tooltip_key",
-                new TextComponentKeybind("key.desktopscreens.open").getUnformattedText()));
+                shortcut != null ? shortcut.get() : new TextComponentKeybind("key.desktopscreens.open").getUnformattedText()));
     }
 
     /** Left out of the creative menu on a server without the mod, where it doesn't exist ({@link ServerCheck}). */

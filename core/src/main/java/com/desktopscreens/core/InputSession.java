@@ -55,7 +55,7 @@ final class InputSession {
      * Windows blinks the taskbar button of a window whose SetForegroundWindow is refused. Not proven.
      */
     private static final int SETTLE_MILLIS = 300;
-    private static final int WM_NULL = 0x0000, LLKHF_EXTENDED = 0x01, VK_PACKET = 0xE7;
+    private static final int WM_NULL = 0x0000, LLKHF_EXTENDED = 0x01, LLKHF_ALTDOWN = 0x20, VK_PACKET = 0xE7;
     /** The taskbars and their thumbnails: clicks there should bring a window forward. */
     private static final Set<String> TASKBAR_CLASSES = new HashSet<String>(Arrays.asList(
             "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "TaskListThumbnailWnd"));
@@ -74,6 +74,9 @@ final class InputSession {
             "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "TaskListThumbnailWnd", "Windows.UI.Core.CoreWindow",
             "XamlExplorerHostIslandWindow", "MultitaskingViewFrame", "ForegroundStaging",
             "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland"));
+    /** The ones Alt+Tab and the task view hold the focus with: the window after them is the one you picked. */
+    private static final Set<String> PICKER_CLASSES = new HashSet<String>(Arrays.asList(
+            "XamlExplorerHostIslandWindow", "MultitaskingViewFrame", "ForegroundStaging"));
     private static final AtomicBoolean shutdownHookAdded = new AtomicBoolean();
 
     private final Monitor target;
@@ -134,6 +137,10 @@ final class InputSession {
     /** The taskbar had the focus, and no window has had it since. Hook thread writes, mover reads. */
     private volatile boolean switcherPending;
     private volatile long lastSwitcherAt;
+    /** Alt+Tab, by its keys. Hook thread only. */
+    private final AltTabKeys altTab = new AltTabKeys();
+    /** The last focus change was to one of {@link #PICKER_CLASSES}. Hook thread only. */
+    private boolean pickerBefore;
 
     InputSession(Monitor target, AppWindow shown, HWND game, int hostScancode, DesktopInput.Listener listener) {
         this.target = target;
@@ -174,7 +181,17 @@ final class InputSession {
     void show(AppWindow window) {
         shown = window == null ? null : window.hwnd;
         shownWindow = window;
+        int[] r = window == null ? null : window.rectOn(target);
+        POINT p = new POINT();
+        boolean outside = r != null && U32.I.GetCursorPos(p) && (p.x < r[0] || p.y < r[1] || p.x >= r[2] || p.y >= r[3]);
         relock();
+        // The lock alone would leave the mouse on the window's edge, on its resize border.
+        if (outside) U32.I.SetCursorPos((r[0] + r[2]) / 2, (r[1] + r[3]) / 2);
+    }
+
+    /** Moves this window over the one shown, as with any window that comes to you. Any thread. */
+    void comeOver(AppWindow window) {
+        bringOver(window.hwnd, "you switched to it, and the window shown stays");
     }
 
     /** The part of the monitor the window shown covers right now, or null: none shown, or it's minimized. */
@@ -235,9 +252,13 @@ final class InputSession {
             @Override
             public LRESULT callback(int nCode, WinUser.WPARAM wParam, WinUser.KBDLLHOOKSTRUCT info) {
                 // What the VR panel sends (InjectedInput) passes untouched: it's typing for the app, never a command.
-                if (nCode >= 0 && !InjectedInput.isOurs(info.dwExtraInfo.longValue())
-                        && handleKey(info.vkCode & 0xFF, isHostKey(info), wParam.intValue())) {
-                    return new LRESULT(1); // swallowed: apps never see it
+                if (nCode >= 0 && !InjectedInput.isOurs(info.dwExtraInfo.longValue())) {
+                    int message = wParam.intValue();
+                    if (handleKey(info.vkCode & 0xFF, isHostKey(info), message)) {
+                        return new LRESULT(1); // swallowed: apps never see it
+                    }
+                    altTab.key(info.vkCode & 0xFF, message == WinUser.WM_KEYDOWN || message == WinUser.WM_SYSKEYDOWN,
+                            (info.flags & LLKHF_ALTDOWN) != 0, System.nanoTime());
                 }
                 return User32.INSTANCE.CallNextHookEx(keyHook, nCode, wParam, new LPARAM(Pointer.nativeValue(info.getPointer())));
             }
@@ -267,7 +288,7 @@ final class InputSession {
                 if (hwnd == null || idObject.intValue() != OBJID_WINDOW || idChild.intValue() != CHILDID_SELF) return;
                 // New windows, and windows you restore from the taskbar, come to you.
                 if (e == EVENT_OBJECT_SHOW) bringOver(hwnd, "appeared");
-                else if (e == EVENT_SYSTEM_MINIMIZEEND) bringOver(hwnd, "restored");
+                else if (e == EVENT_SYSTEM_MINIMIZEEND) restored(hwnd);
                 else if (e == EVENT_SYSTEM_MINIMIZESTART) lastMinimizedAt = System.nanoTime();
                 else if (e == EVENT_SYSTEM_FOREGROUND) focusChanged(hwnd);
             }
@@ -475,13 +496,18 @@ final class InputSession {
                 switcherPending = true;
                 scheduleNudge(1, NUDGE_MILLIS);
             }
+            pickerBefore = PICKER_CLASSES.contains(cls);
             return;
         }
         boolean viaSwitcher = switcherPending && System.nanoTime() - lastSwitcherAt < SWITCHED_NANOS;
         switcherPending = false;
+        // You picked it yourself, for sure: not a click on a window that stays on top, not one taking the focus by itself.
+        boolean pickedByYou = viaSwitcher || pickerBefore || altTab.justUsed(System.nanoTime());
+        pickerBefore = false;
         HWND before = lastFocused;
         lastFocused = w;
         if (w.equals(before) || DESKTOP_CLASSES.contains(cls)) return;
+        altTab.clear();
         // Right after something was minimized, Windows picks the next window (even when you minimized it with
         // its taskbar button). Otherwise, right after a taskbar click, you picked it. Otherwise Windows
         // picked it if the window you were using went away. Some apps focus a helper window of their own (a
@@ -500,7 +526,14 @@ final class InputSession {
             return;
         }
         if (!pickedByWindows) {
-            bringOver(w, "you switched to it");
+            if (pickedByYou && leavesWindowShown(w)) {
+                // It stays where it is, at its own size: moved over the window shown, it was cut to that window's frame
+                // (2026-11-01). The listener can still ask for that, with comeOver.
+                log("it replaces the one window shown");
+                listener.onWindowChosen(AppWindow.of(mainWindow(w)));
+            } else {
+                bringOver(w, "you switched to it");
+            }
         } else if (elsewhere) {
             log("it stays where it is; the keyboard goes to the desktop");
             final HWND picked = w;
@@ -512,6 +545,32 @@ final class InputSession {
                 }
             }, SETTLE_MILLIS); // let its app finish taking the focus first (see SETTLE_MILLIS)
         }
+    }
+
+    /** A window came back from being minimized. */
+    private void restored(HWND w) {
+        // While one window is shown, a window restored by Alt+Tab or its taskbar button may be about to replace it, and
+        // has to stay where it is for that: focusChanged decides, when it gets the focus.
+        HWND window = shown;
+        if (window == null || sameFamily(w, window)) bringOver(w, "restored");
+    }
+
+    /** While one window is shown: whether {@code w} is an app's window other than that one and its dialogs. */
+    private boolean leavesWindowShown(HWND w) {
+        HWND window = shown;
+        return window != null && isAppWindow(mainWindow(w)) && !sameFamily(w, window);
+    }
+
+    /** A window and its dialogs: they all have the same top owner. */
+    private static boolean sameFamily(HWND a, HWND b) {
+        HWND owner = U32.I.GetAncestor(a, GA_ROOTOWNER);
+        return owner != null && owner.equals(U32.I.GetAncestor(b, GA_ROOTOWNER));
+    }
+
+    /** The window a dialog belongs to; the window itself if it's none's, or that one can't be shown (some own theirs by a hidden one). */
+    private static HWND mainWindow(HWND w) {
+        HWND owner = U32.I.GetAncestor(w, GA_ROOTOWNER);
+        return owner != null && isAppWindow(owner) ? owner : w;
     }
 
     private void scheduleNudge(final int attempt, int delayMillis) {

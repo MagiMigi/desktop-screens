@@ -6,6 +6,8 @@ import com.desktopscreens.ScreenBlockEntity;
 import com.desktopscreens.ScreenSharing;
 import com.desktopscreens.ShareStream;
 import com.desktopscreens.TabletItem;
+import com.desktopscreens.core.AppWindow;
+import com.desktopscreens.core.OpenKeyRule;
 import com.desktopscreens.core.Win32;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiErrorScreen;
@@ -17,8 +19,12 @@ import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.util.text.TextFormatting;
+import net.minecraftforge.client.settings.IKeyConflictContext;
+import net.minecraftforge.client.settings.KeyConflictContext;
+import net.minecraftforge.client.settings.KeyModifier;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.opengl.Display;
 
 /** The client's entry point (from {@link ClientMain}): the keys, every tick, and opening the desktop. */
 final class DesktopClient {
@@ -39,12 +45,32 @@ final class DesktopClient {
     /** Minecraft 1.12.2 numbers mouse buttons in its key bindings from -100 (left). */
     private static final int MOUSE_LEFT = -100, MOUSE_RIGHT = -99, MOUSE_MIDDLE = -98;
 
+    /**
+     * Forge hands a key press to the first active binding it finds. {@link #keyInput} reads the key itself, so ours keeps
+     * out of that: otherwise it could take the press and do nothing with it, and another mod's G wouldn't work (Test 87,
+     * 2026-11-06). Only a mouse button still needs Forge's press. Still clashes in Controls, as any binding on the key.
+     */
+    private static final IKeyConflictContext STEPS_ASIDE = new IKeyConflictContext() {
+        @Override
+        public boolean isActive() {
+            return OPEN_KEY.getKeyCode() < 0;
+        }
+
+        @Override
+        public boolean conflicts(IKeyConflictContext other) {
+            return true;
+        }
+    };
+
     /** The tablet was used; open once the use button (right-click) is let go. */
     private static boolean tabletPending;
+    /** A press of {@link #OPEN_KEY} taken from the other bindings ({@link #keyInput}), until a tick acts on it; else null. */
+    private static OpenKeyRule.Result keyTaken;
 
     private DesktopClient() {}
 
     static void init() {
+        OPEN_KEY.setKeyConflictContext(STEPS_ASIDE);
         ClientRegistry.registerKeyBinding(OPEN_KEY);
         ClientRegistry.registerKeyBinding(SETTINGS_KEY);
         ClientRegistry.registerKeyBinding(PIP_KEY);
@@ -103,6 +129,7 @@ final class DesktopClient {
         FocusGuard.tick(mc);
         FocusHandOff.tick(mc);
         FullscreenFocus.tick(mc);
+        ComposedFullscreen.tick(mc);
         WorldScreens.tick(mc);
         LiveCapture.tickAll();
         LiveWindow.tickAll(mc);
@@ -120,14 +147,16 @@ final class DesktopClient {
             SharingInfo.clear();
             BuilderRules.reset(); // the next server says its own
         }
-        while (OPEN_KEY.isPressed()) {
-            if (mc.currentScreen != null) continue;
-            ScreenGroups.Group screen = ScreenAim.usable();
-            if (screen != null) useScreen(mc, screen);
-            else if (hasTablet(mc)) openDesktop(mc);
-            // Else nothing, and quietly: the desktop comes with a tablet or a screen, not with the key alone, and big
-            // packs often have G on something else too.
+        // A Tablet's desktop waits until the key is let go, as with its right-click: with the host key held, a key
+        // repeating into the desktop would be Ctrl + G for whichever app gets the focus.
+        if (keyTaken == OpenKeyRule.Result.SCREEN
+                || keyTaken == OpenKeyRule.Result.TABLET && (!Keyboard.isKeyDown(OPEN_KEY.getKeyCode()) || !Display.isActive())) {
+            boolean tablet = keyTaken == OpenKeyRule.Result.TABLET;
+            keyTaken = null;
+            openKey(mc, tablet);
         }
+        // Left alone by keyInput. A key on a mouse button never passes through there.
+        while (OPEN_KEY.isPressed()) openKey(mc, OPEN_KEY.getKeyCode() < 0 && openKeyFree(mc));
         // Not right away: the mouse moves onto the desktop when it opens, and letting go of the right button there
         // would be a right-click release in some app (on the desktop itself, that opens its context menu).
         if (tabletPending && !mc.gameSettings.keyBindUseItem.isKeyDown()) {
@@ -142,7 +171,60 @@ final class DesktopClient {
         }
     }
 
-    /** Whether the player carries a tablet anywhere in their inventory (the off hand too), so G opens the desktop. */
+    /** "Use the desktop" was pressed: uses the screen looked at, or if {@code tablet}, a Tablet's desktop. */
+    private static void openKey(Minecraft mc, boolean tablet) {
+        if (mc.currentScreen != null) return;
+        ScreenGroups.Group screen = ScreenAim.usable();
+        if (screen != null) useScreen(mc, screen);
+        else if (tablet && hasTablet(mc)) openDesktop(mc);
+        // Else nothing, and quietly: the desktop comes with a tablet or a screen, not with the key alone, and big
+        // packs often have G on something else too.
+    }
+
+    /**
+     * A key event, ahead of the other mods: a press of "Use the desktop" that's ours alone ({@link OpenKeyRule}) is taken
+     * from every binding on the key, for the next tick to act on. By now Forge has counted the press for one of those
+     * bindings, the first it found, never ours ({@link #STEPS_ASIDE}). A mod that reads the key's state directly can still react.
+     */
+    static void keyInput(Minecraft mc) {
+        int code = OPEN_KEY.getKeyCode();
+        if (code <= 0 || mc.player == null || mc.world == null || mc.currentScreen != null) return;
+        if (!Keyboard.getEventKeyState() || Keyboard.isRepeatEvent() || Keyboard.getEventKey() != code) return;
+        int host = hostScancode() <= 0 ? Keyboard.KEY_RCONTROL : HOST_KEY.getKeyCode(); // Right Ctrl when it can't be used
+        OpenKeyRule.Result result = OpenKeyRule.press(Keyboard.isKeyDown(Keyboard.KEY_F3), ScreenAim.usable() != null, hasTablet(mc),
+                Keyboard.isKeyDown(host), openKeyFree(mc), false);
+        if (result == OpenKeyRule.Result.PASS) return;
+        keyTaken = result;
+        for (KeyBinding binding : mc.gameSettings.keyBindings) {
+            if (binding.getKeyCode() == code) {
+                while (binding.isPressed()) {
+                    // each call takes one press away
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether no other mod reacts to the key of "Use the desktop" while playing, whatever is open right now (the Tablet's
+     * tooltip asks from a menu). A binding only for menus or one that needs Ctrl, Shift or Alt with the key doesn't.
+     */
+    private static boolean openKeyFree(Minecraft mc) {
+        for (KeyBinding other : mc.gameSettings.keyBindings) {
+            if (other != OPEN_KEY && OpenKeyRule.countsAsOther(other.getKeyDescription()) && other.getKeyCode() == OPEN_KEY.getKeyCode()
+                    && other.getKeyModifier() == KeyModifier.NONE && other.getKeyConflictContext().conflicts(KeyConflictContext.IN_GAME)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The shortcut that opens the desktop with a Tablet in the inventory now, for the Tablet's tooltip: "G" or "Right Ctrl + G". */
+    static String tabletShortcut() {
+        if (openKeyFree(Minecraft.getMinecraft())) return keyName(OPEN_KEY).getUnformattedText();
+        return new TextComponentTranslation("desktopscreens.key.together", hostKeyName(), keyName(OPEN_KEY)).getUnformattedText();
+    }
+
+    /** Whether the player carries a tablet anywhere in their inventory (the off hand too), which the shortcut needs. */
     static boolean hasTablet(Minecraft mc) {
         if (mc.player == null) return false;
         InventoryPlayer inventory = mc.player.inventory;
@@ -311,6 +393,14 @@ final class DesktopClient {
         Minecraft mc = Minecraft.getMinecraft();
         mc.addScheduledTask(() -> {
             if (mc.currentScreen instanceof DesktopScreen) ((DesktopScreen) mc.currentScreen).onGameChosen();
+        });
+    }
+
+    /** You switched to another window yourself while just one window is shown. Input hook thread. */
+    static void onWindowChosen(AppWindow window) {
+        Minecraft mc = Minecraft.getMinecraft();
+        mc.addScheduledTask(() -> {
+            if (mc.currentScreen instanceof DesktopScreen) ((DesktopScreen) mc.currentScreen).onWindowChosen(window);
         });
     }
 

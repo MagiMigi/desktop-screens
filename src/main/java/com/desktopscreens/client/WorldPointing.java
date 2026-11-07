@@ -562,6 +562,17 @@ public final class WorldPointing {
         return group != null && message.getContents() instanceof TranslatableContents t && "vivecraft.messages.airtypingwarning".equals(t.getKey());
     }
 
+    /** You switched to another window yourself while just one window is shown: as on the panel, it shows instead. */
+    static void onWindowChosen(Minecraft mc, AppWindow window) {
+        if (group == null) return;
+        if (Commands.windowStays(mc, session, group)) {
+            session.comeOver(window);
+        } else {
+            session.switchedTo(window);
+            DesktopConfig.save();
+        }
+    }
+
     /**
      * Right Ctrl + P, + W, + M and + O from a real keyboard, and the picture-in-picture key: as on the panel, P and W
      * for the window under the cursor. The message shows under the bar.

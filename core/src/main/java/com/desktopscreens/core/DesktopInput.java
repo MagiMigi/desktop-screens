@@ -46,6 +46,14 @@ public final class DesktopInput {
          */
         void onGameChosen();
 
+        /**
+         * You switched to another window yourself (Alt+Tab, its taskbar button, the task view...) while just one window
+         * is shown, not one of its own dialogs. {@code window} is the window picked, or the main window of a dialog
+         * picked. It has the keyboard and stays where it is; {@link DesktopInput#show} it, or
+         * {@link DesktopInput#comeOver} if it shouldn't show.
+         */
+        void onWindowChosen(AppWindow window);
+
         /** What happened to which windows, for the log. Window classes and program names only, never titles. */
         void log(String message);
     }
@@ -109,6 +117,12 @@ public final class DesktopInput {
     public void show(AppWindow window) {
         InputSession s = session;
         if (s != null) s.show(window);
+    }
+
+    /** While in desktop mode: moves this window over the one shown, as with any window that comes to you. */
+    public void comeOver(AppWindow window) {
+        InputSession s = session;
+        if (s != null) s.comeOver(window);
     }
 
     /** Gives the keyboard to this window, bringing it back first if it's minimized. */

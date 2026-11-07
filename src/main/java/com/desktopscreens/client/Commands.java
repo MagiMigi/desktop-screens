@@ -37,6 +37,15 @@ final class Commands {
                 : Component.translatable(DesktopClient.vr("desktopscreens.hint.one_window"), shorten(window.label()), DesktopClient.hostKey("W"));
     }
 
+    /**
+     * Whether the window shown stays when you switch to another one yourself. On a screen shared with someone it does:
+     * what a friend sees never changes by a switch, or Alt+Tab to a private window would show it to them. Its source can
+     * still be changed on purpose, as ever. With nothing being shown as one window, there's nothing to replace.
+     */
+    static boolean windowStays(Minecraft mc, DesktopSession session, ScreenGroups.Group screen) {
+        return session.window() == null || screen != null && SharingPage.count(mc, screen) > 0;
+    }
+
     /** The monitor after the one the session shows, in Windows' order (Right Ctrl + M, Next monitor); null with just one. */
     static Monitor nextMonitor(DesktopSession session) {
         List<Monitor> monitors = Monitors.list();

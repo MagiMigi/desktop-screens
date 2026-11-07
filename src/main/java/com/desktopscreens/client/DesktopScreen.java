@@ -265,6 +265,24 @@ public final class DesktopScreen extends Screen {
         onClose();
     }
 
+    /**
+     * You switched to another window yourself while just one window is shown: it shows instead (2026-11-01). No message:
+     * the window itself says it, and a message would cover its tabs for a moment at every switch. Game thread.
+     */
+    void onWindowChosen(AppWindow window) {
+        if (mode != Mode.DESKTOP || !session.controlling()) return; // the settings took the mouse and keyboard back meanwhile
+        if (Commands.windowStays(minecraft, session, screen)) {
+            session.comeOver(window);
+            return;
+        }
+        // As in setMonitor: on a screen, another monitor may be used in another way.
+        boolean reenter = !window.isOn(session.target()) && (screen != null || VrMode.seatedVr());
+        if (reenter) session.stopInput();
+        session.switchedTo(window);
+        DesktopConfig.save();
+        if (reenter) enterDesktop();
+    }
+
     /** The mouse wheel turned while the host key was held. Game thread. */
     void onHostWheel(int delta) {
         if (mode != Mode.DESKTOP || session.inWorld()) return;

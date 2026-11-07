@@ -408,6 +408,7 @@ final class ShareStreamer {
             int number = 0;
             long statsFrom = System.nanoTime(), statsBytes = 0, statsWork = 0;
             int statsFrames = 0;
+            RepeatingLog statsLog = new RepeatingLog();
             try {
                 while (running) {
                     long now = System.nanoTime();
@@ -459,7 +460,7 @@ final class ShareStreamer {
                     statsWork += System.nanoTime() - start;
                     if (now - statsFrom > STATS_NANOS) {
                         double seconds = (now - statsFrom) / 1e9;
-                        DesktopScreens.LOG.info("Sharing stream {}, {} ({}): {} pictures a second at {}x{}, {} KB each, scaling and compressing took {} ms each",
+                        statsLog.report(false, "Sharing stream {}, {} ({}): {} pictures a second at {}x{}, {} KB each, scaling and compressing took {} ms each",
                                 stream, what, h264 != null ? "H.264" : "JPEG", String.format("%.1f", statsFrames / seconds), sw, sh,
                                 statsBytes / Math.max(1, statsFrames) / 1024, String.format("%.1f", statsWork / 1e6 / Math.max(1, statsFrames)));
                         statsFrom = now;

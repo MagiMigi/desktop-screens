@@ -80,6 +80,14 @@ final class DesktopConfig {
      * the config.
      */
     static boolean fullscreenStays = true;
+    /** The desktop has been used at least once in this game folder, so {@link ComposedFullscreen} applies. */
+    static boolean desktopUsed = false;
+    /**
+     * Whether {@link ComposedFullscreen} may keep the F11 window a pixel bigger once the desktop has been used, so using
+     * it doesn't flash. No button (most players never need it, and the panel is full);
+     * {@code fullscreen.composedAfterFirstUse} in the config, for whoever would rather have the game shown directly.
+     */
+    static boolean fullscreenComposed = true;
     static BorderStyle borderStyle = BorderStyle.SOLID;
     /** 0xRRGGBB */
     static int borderColor = 0x808080;
@@ -155,6 +163,8 @@ final class DesktopConfig {
         fastCapture = Boolean.parseBoolean(p.getProperty("fastCapture", Boolean.toString(fastCapture)).trim());
         hideGame = Boolean.parseBoolean(p.getProperty("streaming.hideGame", Boolean.toString(hideGame)).trim());
         fullscreenStays = Boolean.parseBoolean(p.getProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays)).trim());
+        desktopUsed = Boolean.parseBoolean(p.getProperty("desktop.used", Boolean.toString(desktopUsed)).trim());
+        fullscreenComposed = Boolean.parseBoolean(p.getProperty("fullscreen.composedAfterFirstUse", Boolean.toString(fullscreenComposed)).trim());
         borderStyle = enumValue(p, "border.style", borderStyle);
         borderColor = color(p.getProperty("border.color"), borderColor);
         borderThickness = intValue(p, "border.thickness", borderThickness, MIN_THICKNESS, MAX_THICKNESS);
@@ -231,6 +241,8 @@ final class DesktopConfig {
         p.setProperty("fastCapture", Boolean.toString(fastCapture));
         p.setProperty("streaming.hideGame", Boolean.toString(hideGame));
         p.setProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays));
+        p.setProperty("desktop.used", Boolean.toString(desktopUsed));
+        p.setProperty("fullscreen.composedAfterFirstUse", Boolean.toString(fullscreenComposed));
         p.setProperty("border.style", borderStyle.name());
         p.setProperty("border.color", hex(borderColor));
         p.setProperty("border.thickness", Integer.toString(borderThickness));

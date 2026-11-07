@@ -140,8 +140,12 @@ if (claims != null) {
     }
 }
 
+// A second player in a big pack, with the pack's mods copied into its game folder: -PpackTest=<the pack's NeoForge
+// version>, as those mods may need that version. A CurseForge profile can only log in as its one account.
+val packTest = findProperty("packTest") as String?
+
 neoForge {
-    version = prop("deps.neoforge")
+    version = packTest ?: prop("deps.neoforge")
     // Parchment's parameter names, for versions up to 1.21.11; 26.1 on comes with Mojang's own.
     if (sc.current.parsed < "26.1") parchment {
         minecraftVersion = prop("deps.parchment_minecraft")
@@ -163,7 +167,7 @@ neoForge {
             // (GlRenderPass.VALIDATION): "Missing sampler Sampler1" on something Iris draws, not ours (2026-11-05).
             // Players' games never check, so neither do these. 26.3 renamed the switch (FrontendGpuDevice.STRICT_VALIDATION):
             // without it, Iris's shadow pass stopped the test game on "Index 1 out of bounds" (2026-11-05).
-            if (shaders != null) {
+            if (shaders != null || packTest != null) {
                 systemProperty("neoforge.disableGlValidation", "true")
                 systemProperty("neoforge.disableBlaze3DValidation", "true")
             }

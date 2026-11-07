@@ -230,6 +230,26 @@ final class DesktopScreen extends GuiScreen {
         close();
     }
 
+    /**
+     * You switched to another window yourself while just one window is shown: it shows instead (2026-11-01). No message:
+     * the window itself says it, and a message would cover its tabs for a moment at every switch. On a screen shared with
+     * someone the window shown stays: what a friend sees never changes by a switch, or Alt+Tab to a private window would
+     * show it to them. Game thread.
+     */
+    void onWindowChosen(AppWindow window) {
+        if (mode != Mode.DESKTOP || !session.controlling()) return; // the settings took the mouse and keyboard back meanwhile
+        if (session.window() == null || screen != null && SharingPage.count(mc, screen) > 0) {
+            session.comeOver(window);
+            return;
+        }
+        // As in setMonitor: on a screen, another monitor may be used in another way.
+        boolean reenter = screen != null && !window.isOn(session.target());
+        if (reenter) session.stopInput();
+        session.switchedTo(window);
+        DesktopConfig.save();
+        if (reenter) enterDesktop();
+    }
+
     /** The mouse wheel turned while the host key was held. Game thread. */
     void onHostWheel(int delta) {
         if (mode != Mode.DESKTOP || session.inWorld()) return;

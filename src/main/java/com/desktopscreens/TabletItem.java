@@ -19,6 +19,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * The tablet: right-click it to use your PC's desktop. Registered on both sides, so it must never touch client
@@ -28,6 +29,8 @@ public final class TabletItem extends Item {
     public static final String NAME = "tablet";
     /** Set by the client when it starts; null on a dedicated server. */
     public static volatile Runnable onUseClient;
+    /** The shortcut that opens it from the inventory now, which depends on the other mods' keys. Set like {@link #onUseClient}. */
+    public static volatile Supplier<Component> shortcutClient;
 
     public TabletItem(Properties properties) {
         super(properties);
@@ -69,9 +72,10 @@ public final class TabletItem extends Item {
     *///?}
 
     private static List<Component> tooltip() {
+        Supplier<Component> shortcut = shortcutClient;
         return List.of(Component.translatable("item.desktopscreens.tablet.tooltip").withStyle(ChatFormatting.GRAY),
-                // A keybind component shows whatever key it's bound to now, and needs no client code here.
-                Component.translatable("item.desktopscreens.tablet.tooltip_key", Component.keybind("key.desktopscreens.open"))
+                // A keybind component shows whatever key it's bound to now.
+                Component.translatable("item.desktopscreens.tablet.tooltip_key", shortcut != null ? shortcut.get() : Component.keybind("key.desktopscreens.open"))
                         .withStyle(ChatFormatting.DARK_GRAY));
     }
 }

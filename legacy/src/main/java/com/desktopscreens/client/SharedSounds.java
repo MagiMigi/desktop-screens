@@ -256,6 +256,7 @@ final class SharedSounds {
         Near near;
         float volume = -1;
         long statsFrom = System.nanoTime(), subtitleAt;
+        final RepeatingLog statsLog = new RepeatingLog();
         // Pump thread only:
         OpusDecoder decoder;
         int lastStream, lastSeq;
@@ -361,7 +362,7 @@ final class SharedSounds {
                 bufferedSum = lineSum = 0;
             }
             if (sounding || u > 0 || o > 0) {
-                DesktopScreens.LOG.info("Shared sound from {}: about {} ms waiting here (cushion {} ms) plus {} ms in the sound output, "
+                statsLog.report(u > 0 || o > 0, "Shared sound from {}: about {} ms waiting here (cushion {} ms) plus {} ms in the sound output, "
                                 + "volume {}%, ran dry {} times (packets late), {} ms cut to catch up, ran out {} times (this game or PC stalled)",
                         name, r == 0 ? 0 : sum / r * 1000 / RATE, c * 1000 / RATE, lr == 0 ? 0 : lineTotal / lr * 1000 / RATE,
                         Math.round(volume * 100), u, t * 1000 / RATE, o);

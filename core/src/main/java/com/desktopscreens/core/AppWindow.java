@@ -43,6 +43,11 @@ public final class AppWindow {
         this.windowClass = className(hwnd);
     }
 
+    /** This window, which the caller knows to be an app window ({@link #isAppWindow}). */
+    static AppWindow of(HWND hwnd) {
+        return new AppWindow(hwnd);
+    }
+
     /** "program|class", saved in the config to find the window again next time. */
     public String key() {
         return exe + "|" + windowClass;

@@ -38,6 +38,8 @@ final class ShareTiming {
         int pictures, sounds;
         /** The sound's delay right now, smoothed over about half a second, and when sound was last heard. */
         long soundDelay, soundAt;
+        /** Only {@link #tick} uses it. */
+        final RepeatingLog log = new RepeatingLog();
     }
 
     /**
@@ -116,7 +118,7 @@ final class ShareTiming {
                 line.append("only ").append(pictures > 0 ? "pictures" : "sound").append(" came, and the clocks differ (two PCs), so nothing to compare");
             }
             if (!onePc && pictures > 0 && sounds > 0) line.append(" (two PCs: only this difference is known)");
-            DesktopScreens.LOG.info(line.toString());
+            t.log.report(false, "{}", line);
         }
     }
 
