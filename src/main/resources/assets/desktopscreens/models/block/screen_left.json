@@ -9,7 +9,7 @@
       "from": [15, 1, 14],
       "to": [16, 15, 14],
       "faces": {
-        "north": { "uv": [0, 1, 1, 15], "texture": "#front" }
+        "north": { "uv": [0, 1, 1, 15], "texture": "#front", "tintindex": 2 }
       }
     }
   ]

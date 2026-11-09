@@ -8,19 +8,24 @@ import com.desktopscreens.client.DesktopClient;
 //? if <26.1 {
 import com.desktopscreens.client.DesktopShaders;
 //?}
+import com.desktopscreens.client.ScreenFrames;
 import com.desktopscreens.client.ScreenRenderer;
 //? if <1.20.5 {
 /*import com.desktopscreens.net.Payloads;
 *///?}
 //? if <26.1 {
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 //?} else {
 /*import com.desktopscreens.DesktopScreens;
+import java.util.List;
+import net.fabricmc.fabric.api.client.rendering.v1.BlockColorRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
+import net.minecraft.client.color.block.BlockTintSource;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
@@ -59,6 +64,13 @@ public final class DesktopScreensFabricClient implements ClientModInitializer {
         BlockEntityRenderers.register(DesktopScreensFabric.screenEntity, ScreenRenderer::new);
         // Picture-in-picture goes under the HUD from a mixin (GuiMixin): Fabric has no HUD layers for 1.21.1.
         HudRenderCallback.EVENT.register((g, deltaTracker) -> DesktopClient.renderHud(g));
+        //?}
+        // The frame pieces' tint, by the model's tint index: how "Frames: OFF" hides the frame (ScreenFrames).
+        //? if >=26.1 {
+        /*BlockColorRegistry.register(List.<BlockTintSource>of(state -> ScreenFrames.tint(0), state -> ScreenFrames.tint(1),
+                state -> ScreenFrames.tint(2), state -> ScreenFrames.tint(3)), DesktopScreensFabric.screen);
+        *///?} else {
+        ColorProviderRegistry.BLOCK.register((state, level, pos, tintIndex) -> ScreenFrames.tint(tintIndex), DesktopScreensFabric.screen);
         //?}
         //? if >=26.2 {
         /*// Handed in with the world's other custom geometry; drawn after it all was.

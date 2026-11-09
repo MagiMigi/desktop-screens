@@ -140,7 +140,8 @@ final class DesktopScreen extends GuiScreen {
             } else {
                 int[] size = session.pictureSize();
                 gliding = true;
-                CameraGlide.in(CameraGlide.facing(screen, screen.pictureRect(size[0], size[1]), mc));
+                // Aimed at the picture's true shape: it eases to that on the way, and then matches the real desktop.
+                CameraGlide.in(CameraGlide.facing(screen, screen.pictureRect(size[0], size[1], 1)), screen.anchor());
             }
         } else {
             if (atScreen) {
@@ -172,6 +173,13 @@ final class DesktopScreen extends GuiScreen {
     private void rebuildWidgets() {
         buttonList.clear();
         addWidgets();
+    }
+
+    /** Frames switched while the camera is at the screen: the glide back starts from the picture's new size. */
+    private void aimGlideAgain() {
+        if (screen == null || !atScreen) return;
+        int[] size = session.pictureSize();
+        CameraGlide.aimAt(CameraGlide.facing(screen, screen.pictureRect(size[0], size[1], 1)));
     }
 
     private void beginDesktop() {
@@ -447,9 +455,17 @@ final class DesktopScreen extends GuiScreen {
                 })).tooltip(new TextComponentTranslation("desktopscreens.settings.view.tooltip", DesktopClient.hostKeyName()));
         y += 22;
         // On the main page, where a player tired of the banner looks first.
-        add(new Widget.Cycle<>(x, y, w, new TextComponentTranslation("desktopscreens.settings.key_hints"), () -> Arrays.asList(true, false),
+        // Frames shares the row: there's no room for another.
+        int halfRow = (w - 2) / 2;
+        add(new Widget.Cycle<>(x, y, halfRow, new TextComponentTranslation("desktopscreens.settings.key_hints"), () -> Arrays.asList(true, false),
                 DesktopScreen::onOff, DesktopConfig.keyHints, value -> DesktopConfig.keyHints = value))
                 .tooltip(new TextComponentTranslation("desktopscreens.settings.key_hints.tooltip"));
+        add(new Widget.Cycle<>(x + w - halfRow, y, halfRow, new TextComponentTranslation("desktopscreens.settings.frames"), () -> Arrays.asList(true, false),
+                DesktopScreen::onOff, DesktopConfig.frames, value -> {
+                    ScreenFrames.set(mc, value);
+                    aimGlideAgain();
+                }))
+                .tooltip(new TextComponentTranslation("desktopscreens.settings.frames.tooltip"));
         y += 22;
         // The streaming page shares this row: there's no room for another.
         int streamWidth = 50;

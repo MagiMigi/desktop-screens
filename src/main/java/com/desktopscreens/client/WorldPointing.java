@@ -4,7 +4,6 @@ import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.core.AppWindow;
 import com.desktopscreens.core.Monitor;
 import com.desktopscreens.core.PanelMapping;
-import com.desktopscreens.mixin.GameRendererAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Camera;
@@ -384,15 +383,7 @@ public final class WorldPointing {
         boolean held = mc.mouseHandler.isMouseGrabbed(); // its position runs on unbounded then
         double nx = held ? 0 : 2 * mc.mouseHandler.xpos() / window.getScreenWidth() - 1;
         double ny = held ? 0 : 1 - 2 * mc.mouseHandler.ypos() / window.getScreenHeight();
-        // The field of view the world is drawn with, not just the setting: flying and sprinting widen it.
-        //? if >=26.1 {
-        /*double fov = camera.getFov();
-        *///?} else if >=1.21 {
-        double fov = ((GameRendererAccessor) mc.gameRenderer).desktopscreens$fov(camera, camera.getPartialTickTime(), true);
-        //?} else {
-        /*double fov = ((GameRendererAccessor) mc.gameRenderer).desktopscreens$fov(camera, mc.getFrameTime(), true);
-        *///?}
-        double tanY = Math.tan(Math.toRadians(fov) / 2), tanX = tanY * window.getScreenWidth() / window.getScreenHeight();
+        double tanY = Math.tan(Math.toRadians(CameraGlide.drawnFov(mc, camera)) / 2), tanX = tanY * window.getScreenWidth() / window.getScreenHeight();
         double x = look.x() + up.x() * ny * tanY - left.x() * nx * tanX;
         double y = look.y() + up.y() * ny * tanY - left.y() * nx * tanX;
         double z = look.z() + up.z() * ny * tanY - left.z() * nx * tanX;

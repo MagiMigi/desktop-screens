@@ -114,6 +114,8 @@ public final class DesktopClient {
     }
 
     public static void tick(Minecraft mc) {
+        // Read at the title screen, before any world's chunks are built: they draw the frames by this config (ScreenFrames).
+        DesktopConfig.load();
         if (mc.screen instanceof DesktopScreen || WorldPointing.active()) Awake.now(mc); // using the desktop, or its settings
         WorldPointing.tick(mc);
         FocusHandOff.tick(mc);

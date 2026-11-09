@@ -4,6 +4,7 @@ import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.ServerCheck;
 import com.desktopscreens.client.DesktopClient;
 import com.desktopscreens.client.DesktopShaders;
+import com.desktopscreens.client.ScreenFrames;
 import com.desktopscreens.client.ScreenRenderer;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import net.minecraft.client.Minecraft;
@@ -11,6 +12,7 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.client.event.RegisterColorHandlersEvent;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.client.event.RegisterShadersEvent;
@@ -37,6 +39,7 @@ final class DesktopScreensForgeClient {
         modBus.addListener(DesktopScreensForgeClient::registerKeys);
         modBus.addListener(DesktopScreensForgeClient::registerShaders);
         modBus.addListener(DesktopScreensForgeClient::registerRenderers);
+        modBus.addListener(DesktopScreensForgeClient::registerBlockColors);
         modBus.addListener(DesktopScreensForgeClient::registerOverlays);
         MinecraftForge.EVENT_BUS.addListener(DesktopScreensForgeClient::clientTick);
         MinecraftForge.EVENT_BUS.addListener(DesktopScreensForgeClient::renderLevel);
@@ -63,6 +66,11 @@ final class DesktopScreensForgeClient {
 
     private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(DesktopScreensForge.SCREEN_ENTITY.get(), ScreenRenderer::new);
+    }
+
+    /** The frame pieces' tint, by the model's tint index: how "Frames: OFF" hides the frame (ScreenFrames). */
+    private static void registerBlockColors(RegisterColorHandlersEvent.Block event) {
+        event.register((state, level, pos, tintIndex) -> ScreenFrames.tint(tintIndex), DesktopScreensForge.SCREEN.get());
     }
 
     /** Picture-in-picture under the rest of the HUD; the hints over the crosshair. */

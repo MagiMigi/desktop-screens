@@ -54,6 +54,8 @@ final class SharedPictures {
      */
     private static final int PACE_SAMPLES = 60, PACE_RANK = 3;
     private static final long PACE_MARGIN_NANOS = 5_000_000L;
+    /** {@link #sayIfStuck}: how long a first picture may take to go up, and how recently its screen must have been drawn. */
+    private static final long STUCK_NANOS = 1_500_000_000L, DRAWN_NANOS = 500_000_000L;
 
     /** One of an owner's streams. */
     private record StreamKey(UUID owner, int stream) {}
@@ -107,6 +109,11 @@ final class SharedPictures {
         /** When the owner ended it ({@link ShareStream.End}), or 0. Client thread. */
         long endedAt;
         int width, height;
+        /** When its first picture came, how many came and were decoded, and whether {@link #sayIfStuck} has spoken. */
+        final long firstAt = System.nanoTime();
+        int arrived;
+        volatile int decodedCount;
+        boolean saidStuck;
 
         Shared(Minecraft mc, StreamKey key) {
             this.key = key;
@@ -199,6 +206,7 @@ final class SharedPictures {
         long now = System.nanoTime();
         for (Iterator<Shared> it = STREAMS.values().iterator(); it.hasNext(); ) {
             Shared s = it.next();
+            sayIfStuck(mc, s, now);
             if (now - s.lastWanted > LINGER_NANOS || s.endedAt != 0 && now - s.endedAt > ENDED_NANOS) {
                 close(mc, s);
                 it.remove();
@@ -209,6 +217,23 @@ final class SharedPictures {
             if (shown.previous != null && !STREAMS.containsKey(shown.previous)) shown.previous = null;
             if (!STREAMS.containsKey(shown.current)) it.remove();
         }
+    }
+
+    /**
+     * Once per stream, if its screen is being drawn but none of its pictures has gone up {@link #STUCK_NANOS} after the
+     * first arrived: how far they got. Says nothing when sharing works. A first share stayed dark once, with nothing in
+     * the log to tell why, until the screen was hidden and shown again (2026-11-09).
+     */
+    private static void sayIfStuck(Minecraft mc, Shared s, long now) {
+        if (s.width != 0 || s.saidStuck || now - s.firstAt < STUCK_NANOS || now - s.lastWanted > DRAWN_NANOS) return;
+        s.saidStuck = true;
+        boolean onAScreen = false;
+        for (Shown shown : SHOWN.values()) onAScreen |= s.key.equals(shown.current);
+        ClientPacketListener connection = mc.getConnection();
+        PlayerInfo info = connection != null ? connection.getPlayerInfo(s.key.owner()) : null;
+        DesktopScreens.LOG.warn("Sharing: stream {} of {} has shown no picture {} ms after the first arrived: {} arrived, {} decoded, {} to decode, "
+                        + "{} waiting to show; decoder {}, on a screen: {}", s.key.stream(), info != null ? Players.name(info.getProfile()) : "?",
+                (now - s.firstAt) / 1_000_000, s.arrived, s.decodedCount, s.pictures.size(), s.decoded.size(), s.h264Broken ? "failed" : "fine", onAScreen);
     }
 
     /**
@@ -242,6 +267,7 @@ final class SharedPictures {
             DesktopScreens.LOG.info("Sharing: a screen of {}'s shows their stream {}{}", info != null ? Players.name(info.getProfile()) : "?",
                     frame.stream(), shown.previous != null ? " (was " + shown.previous.stream() + ")" : "");
         }
+        s.arrived++;
         s.pictures.add(frame);
         wake(s);
     }
@@ -322,6 +348,7 @@ final class SharedPictures {
                 try {
                     Decoded d = h264 ? decodeH264(s, picture, taken) : decode(picture, taken);
                     if (d != null) {
+                        s.decodedCount++; // this thread alone writes it
                         s.decoded.offerLast(d);
                         while (s.decoded.size() > MAX_WAITING) free(s.decoded.pollFirst());
                         pace(s, d.ready() - d.taken());

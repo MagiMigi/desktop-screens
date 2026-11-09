@@ -65,6 +65,12 @@ final class DesktopConfig {
      * where an annoyed player looks first (2026-11-05: the banner covered a full-size Chrome's tabs).
      */
     static boolean keyHints = true;
+    /**
+     * The frame around screens ({@link ScreenFrames}): this player's own setting, for every screen they see, theirs and
+     * other players'; nothing in the world changes. Anything but "false" in the file means on, the safe default, so a
+     * typo never takes frames away. Read by the threads that build the world's chunks, hence volatile.
+     */
+    static volatile boolean frames = true;
     /** DXGI Desktop Duplication (up to the monitor's refresh rate); off means GDI only (about 60 fps). */
     static boolean fastCapture = true;
     /**
@@ -160,6 +166,7 @@ final class DesktopConfig {
         framed = Boolean.parseBoolean(p.getProperty("view.framed", Boolean.toString(framed)).trim());
         frameMargin = intValue(p, "view.frameMargin", frameMargin, MIN_MARGIN, MAX_MARGIN);
         keyHints = Boolean.parseBoolean(p.getProperty("view.keyHints", Boolean.toString(keyHints)).trim());
+        frames = !"false".equalsIgnoreCase(p.getProperty("screens.frames", "true").trim());
         fastCapture = Boolean.parseBoolean(p.getProperty("fastCapture", Boolean.toString(fastCapture)).trim());
         hideGame = Boolean.parseBoolean(p.getProperty("streaming.hideGame", Boolean.toString(hideGame)).trim());
         fullscreenStays = Boolean.parseBoolean(p.getProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays)).trim());
@@ -238,6 +245,7 @@ final class DesktopConfig {
         p.setProperty("view.framed", Boolean.toString(framed));
         p.setProperty("view.frameMargin", Integer.toString(frameMargin));
         p.setProperty("view.keyHints", Boolean.toString(keyHints));
+        p.setProperty("screens.frames", Boolean.toString(frames));
         p.setProperty("fastCapture", Boolean.toString(fastCapture));
         p.setProperty("streaming.hideGame", Boolean.toString(hideGame));
         p.setProperty("fullscreen.stayForOtherMonitors", Boolean.toString(fullscreenStays));

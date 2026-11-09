@@ -7,6 +7,7 @@ import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.Players;
 import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBuilder;
+import com.desktopscreens.core.PictureFit;
 //? if >=26.2 {
 /*import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -822,16 +823,20 @@ public final class ScreenBuilderClient {
 
     /**
      * How tall the screen should be at this width for what it will show to fill it, like "For DISPLAY2 (4:3): 4 × 3".
-     * The picture fills the glass inside the outer bezel.
+     * Follows the Frames setting and the small stretch: "just right" only when the picture really fills the glass, and
+     * when no height at this width does, it says so rather than suggesting the shape the player already has.
      */
     private static Component shapeHint(int cols, int rows) {
         if (source == null || source.width() <= 0 || source.height() <= 0) return null;
-        float bezel = ScreenGroups.BEZEL;
-        int best = Math.max(1, Math.round((cols - 2 * bezel) * source.height() / source.width() + 2 * bezel));
+        float bezel = ScreenFrames.bezel();
         Component shown = source.window() ? Component.translatable("desktopscreens.builder.the_window") : Component.literal(source.monitor());
         String ratio = ratio(source.width(), source.height());
-        return best == rows ? Component.translatable("desktopscreens.builder.shape_fits", shown, ratio)
-                : Component.translatable("desktopscreens.builder.shape", shown, ratio, cols, best);
+        if (PictureFit.fills(cols - 2 * bezel, rows - 2 * bezel, source.width(), source.height())) {
+            return Component.translatable("desktopscreens.builder.shape_fits", shown, ratio);
+        }
+        int best = PictureFit.nearestRows(cols, bezel, source.width(), source.height());
+        return best != rows ? Component.translatable("desktopscreens.builder.shape", shown, ratio, cols, best)
+                : Component.translatable("desktopscreens.builder.shape_close", shown, ratio);
     }
 
     /** Like "16:9", or "2.39:1" when the whole numbers would be big. */

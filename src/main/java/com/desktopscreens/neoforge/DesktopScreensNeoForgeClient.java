@@ -3,7 +3,13 @@ package com.desktopscreens.neoforge;
 import com.desktopscreens.DesktopScreens;
 import com.desktopscreens.ServerCheck;
 import com.desktopscreens.client.DesktopClient;
+import com.desktopscreens.client.ScreenFrames;
 import com.desktopscreens.client.ScreenRenderer;
+//? if >=26.1 {
+/*import java.util.List;
+import net.minecraft.client.color.block.BlockTintSource;
+*///?}
+import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 //? if <26.1 {
 import com.desktopscreens.client.DesktopShaders;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -53,6 +59,15 @@ final class DesktopScreensNeoForgeClient {
         //?}
         modBus.addListener(EntityRenderersEvent.RegisterRenderers.class,
                 event -> event.registerBlockEntityRenderer(DesktopScreensNeoForge.SCREEN_ENTITY.get(), ScreenRenderer::new));
+        // The frame pieces' tint, by the model's tint index: how "Frames: OFF" hides the frame (ScreenFrames).
+        //? if >=26.1 {
+        /*modBus.addListener(RegisterColorHandlersEvent.BlockTintSources.class, event -> event.register(List.<BlockTintSource>of(
+                state -> ScreenFrames.tint(0), state -> ScreenFrames.tint(1), state -> ScreenFrames.tint(2), state -> ScreenFrames.tint(3)),
+                DesktopScreensNeoForge.SCREEN.get()));
+        *///?} else {
+        modBus.addListener(RegisterColorHandlersEvent.Block.class, event -> event.register(
+                (state, level, pos, tintIndex) -> ScreenFrames.tint(tintIndex), DesktopScreensNeoForge.SCREEN.get()));
+        //?}
         modBus.addListener(RegisterGuiLayersEvent.class, event -> {
             // Picture-in-picture under the rest of the HUD; the hints over the crosshair.
             event.registerBelow(VanillaGuiLayers.CROSSHAIR, DesktopScreens.id("pip"), (g, deltaTracker) -> DesktopClient.renderUnderHud(g));

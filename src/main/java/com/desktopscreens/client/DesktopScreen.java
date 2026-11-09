@@ -196,7 +196,8 @@ public final class DesktopScreen extends Screen {
             } else {
                 int[] size = session.pictureSize();
                 gliding = true;
-                CameraGlide.in(CameraGlide.facing(screen, screen.pictureRect(size[0], size[1]), minecraft));
+                // Aimed at the picture's true shape: it eases to that on the way, and then matches the real desktop.
+                CameraGlide.in(CameraGlide.facing(screen, screen.pictureRect(size[0], size[1], 1)), screen.anchor());
             }
         } else {
             if (atScreen) {
@@ -206,6 +207,13 @@ public final class DesktopScreen extends Screen {
             session.setInWorld(true);
             beginDesktop();
         }
+    }
+
+    /** Frames switched while the camera is at the screen: the glide back starts from the picture's new size. */
+    private void aimGlideAgain() {
+        if (screen == null || !atScreen) return;
+        int[] size = session.pictureSize();
+        CameraGlide.aimAt(CameraGlide.facing(screen, screen.pictureRect(size[0], size[1], 1)));
     }
 
     private void beginDesktop() {
@@ -461,9 +469,18 @@ public final class DesktopScreen extends Screen {
         y += 22;
         // On the main page, where a player tired of the banner looks first. With every optional row below (shader
         // brightness and VR screens), the panel still ends at 238, inside VR's 240.
+        // Frames shares the row: there's no room for another (the panel fits VR's 240 units).
+        int halfRow = (w - 2) / 2;
         addRenderableWidget(CycleButton.onOffBuilder(DesktopConfig.keyHints)
                 .withTooltip(value -> Tooltip.create(Component.translatable(DesktopClient.vr("desktopscreens.settings.key_hints.tooltip"))))
-                .create(x, y, w, 20, Component.translatable("desktopscreens.settings.key_hints"), (button, value) -> DesktopConfig.keyHints = value));
+                .create(x, y, halfRow, 20, Component.translatable("desktopscreens.settings.key_hints"), (button, value) -> DesktopConfig.keyHints = value));
+        addRenderableWidget(CycleButton.onOffBuilder(DesktopConfig.frames)
+                .withTooltip(value -> Tooltip.create(Component.translatable("desktopscreens.settings.frames.tooltip")))
+                .create(x + w - halfRow, y, halfRow, 20, Component.translatable("desktopscreens.settings.frames"),
+                        (button, value) -> {
+                            ScreenFrames.set(minecraft, value);
+                            aimGlideAgain();
+                        }));
         y += 22;
         // The streaming page shares this row, as picture-in-picture's does "Use the desktop": there's no room for another.
         int streamWidth = 50;

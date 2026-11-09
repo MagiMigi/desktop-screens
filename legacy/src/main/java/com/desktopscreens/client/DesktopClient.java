@@ -126,6 +126,8 @@ final class DesktopClient {
     }
 
     static void tick(Minecraft mc) {
+        // Read at the title screen, before any world's chunks are built: they draw the frames by this config (ScreenFrames).
+        DesktopConfig.load();
         FocusGuard.tick(mc);
         FocusHandOff.tick(mc);
         FullscreenFocus.tick(mc);

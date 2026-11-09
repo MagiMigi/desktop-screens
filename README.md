@@ -21,7 +21,7 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 
 ## What's in it
 
-- **Screens:** thin panels for walls, floors and ceilings. Side by side they join into one big screen. Right-click one with an empty hand to turn it on: it shows your desktop to you and anyone you share it with.
+- **Screens:** thin panels for walls, floors and ceilings. Side by side they join into one big screen. Right-click one with an empty hand to turn it on: it shows your desktop to you and anyone you share it with. Turn **Frames** off in the settings for screens with no frame (your own view only).
 - **Screen Builder:** builds a whole screen at once, up to 32 × 32 blocks, with a hologram that follows your view. Shift-click a screen to move it, resize it or take it down.
 - **Tablet:** right-click it, or press G while it's anywhere in your inventory (Right Ctrl + G if another mod uses G; its tooltip tells you which).
 - **Its own picture on every screen:** each screen can show a different monitor or just one window.

@@ -35,7 +35,7 @@ abstract class CameraMixin {
     /^* After Minecraft placed the camera at the player's eyes for this frame, before it works out what's in view. ^/
     @Inject(method = "alignWithEntity", at = @At("TAIL"))
     private void desktopscreens$glide(float partialTicks, CallbackInfo ci) {
-        CameraGlide.Pose pose = CameraGlide.apply(position(), yRot(), xRot());
+        CameraGlide.Pose pose = CameraGlide.apply((Camera) (Object) this, position(), yRot(), xRot());
     *///?} else {
     @Shadow
     public abstract Vec3 getPosition();
@@ -50,7 +50,7 @@ abstract class CameraMixin {
     @Inject(method = "setup", at = @At("TAIL"))
     private void desktopscreens$glide(BlockGetter level, Entity entity, boolean detached, boolean thirdPersonReverse,
                                       float partialTick, CallbackInfo ci) {
-        CameraGlide.Pose pose = CameraGlide.apply(getPosition(), getYRot(), getXRot());
+        CameraGlide.Pose pose = CameraGlide.apply((Camera) (Object) this, getPosition(), getYRot(), getXRot());
     //?}
         if (pose == null) return;
         setRotation(pose.yaw(), pose.pitch());

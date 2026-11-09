@@ -2,6 +2,7 @@ package com.desktopscreens.client;
 
 import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBlockEntity;
+import com.desktopscreens.core.PictureFit;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
@@ -94,14 +95,20 @@ final class ScreenGroups {
         }
 
         /**
-         * Where a picture of this size goes, {left, bottom, width, height} in columns and rows: inside the outer
-         * bezel, as big as fits, centered (black bars where the shape doesn't match).
+         * Where a picture of this size goes right now, {left, bottom, width, height} in columns and rows: inside the
+         * outer bezel, stretched to fill if its shape is close enough ({@link PictureFit}), else as big as fits and
+         * centered (black bars where the shape doesn't match). While the camera glides to this screen, it eases to its
+         * true shape ({@link CameraGlide#straightened}).
          */
         float[] pictureRect(int pictureWidth, int pictureHeight) {
-            float areaW = cols - 2 * BEZEL, areaH = rows - 2 * BEZEL;
-            float scale = Math.min(areaW / pictureWidth, areaH / pictureHeight);
-            float w = pictureWidth * scale, h = pictureHeight * scale;
-            return new float[] {minCol + BEZEL + (areaW - w) / 2, minRow + BEZEL + (areaH - h) / 2, w, h};
+            return pictureRect(pictureWidth, pictureHeight, CameraGlide.straightened(anchor));
+        }
+
+        /** {@link #pictureRect(int, int)} at a given {@code straighten}: 0 stretched where allowed, 1 the picture's true shape. */
+        float[] pictureRect(int pictureWidth, int pictureHeight, float straighten) {
+            float bezel = ScreenFrames.bezel();
+            float[] place = PictureFit.place(cols - 2 * bezel, rows - 2 * bezel, pictureWidth, pictureHeight, straighten);
+            return new float[] {minCol + bezel + place[0], minRow + bezel + place[1], place[2], place[3]};
         }
 
         /** A point on the front of the glass, in the world, from columns (from a block's left edge) and rows (from its bottom). */
@@ -128,6 +135,16 @@ final class ScreenGroups {
             // Undoes frontPoint, as nearestPoint does.
             double col = (x - origin.getX() - 0.5) * right.getStepX() + (z - origin.getZ() - 0.5) * right.getStepZ() + 0.5;
             return new double[] {col, y - origin.getY()};
+        }
+
+        /**
+         * Where a point in the world is as seen from the glass: {col, row} like {@link #frontPoint} takes them (beyond
+         * the screen's edges too), then how many blocks it is in front of the glass (below 0 behind it).
+         */
+        float[] fromGlass(Vec3 p) {
+            double x = p.x - origin.getX() - 0.5, z = p.z - origin.getZ() - 0.5;
+            return new float[] {(float) (x * right.getStepX() + z * right.getStepZ() + 0.5), (float) (p.y - origin.getY()),
+                    (float) (x * facing.getStepX() + z * facing.getStepZ() + 0.375)};
         }
 
         /** The point of the glass nearest to {@code p}: how far away the screen is, for its sound. */

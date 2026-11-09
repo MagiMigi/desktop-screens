@@ -2,6 +2,7 @@ package com.desktopscreens.client;
 
 import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBlockEntity;
+import com.desktopscreens.core.PictureFit;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -11,7 +12,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.world.phys.Vec3;
 *///?} else {
 import net.minecraft.client.renderer.MultiBufferSource;
 //?}
@@ -21,6 +21,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
 import java.util.UUID;
@@ -35,23 +36,24 @@ import java.util.UUID;
 *///?} else {
 public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEntity> {
 //?}
-    private static final float BEZEL = ScreenGroups.BEZEL;
+    /** How far the picture floats in front of the glass, in blocks. */
+    private static final float LIFT = 0.002f;
     /** Just in front of the glass, in the model's coordinates (the panel is the back 2/16 of the block). */
-    private static final float FRONT_Z = 14 / 16f - 0.002f;
+    private static final float FRONT_Z = 14 / 16f - LIFT;
     /** The note on the cover over the game in a picture of its own monitor ({@link GameCover}): a little toward the viewer. */
     private static final float NOTE_Z = FRONT_Z - 0.004f;
 
     public ScreenRenderer(BlockEntityRendererProvider.Context context) {}
 
-    /** What one block draws this frame, worked out from the world first. */
+    /** What one block draws this frame, worked out from the world first; {@code eye} is the camera as seen from the glass. */
     private record Piece(ScreenGroups.Group group, BlockPos pos, BlockState state, WorldScreens.Picture picture, float[] rect,
-                         float[] cover, boolean drawsCover, WorldBar.Frame bar) {}
+                         float[] cover, boolean drawsCover, WorldBar.Frame bar, float[] eye) {}
 
     /**
      * What {@code screen} shows this frame, or null; also notes whether it's the block that draws the game's cover. In VR
      * a screen's hint shows at it ({@link ScreenAim#hintFrame}), also when it shows no picture: then that's all it draws.
      */
-    private static Piece piece(ScreenBlockEntity screen, Object pass) {
+    private static Piece piece(ScreenBlockEntity screen, Object pass, Vec3 camera) {
         Minecraft mc = Minecraft.getInstance();
         Level level = screen.getLevel();
         BlockState state = screen.getBlockState();
@@ -83,12 +85,12 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
         if (mine) WorldScreens.drew(mc, group, System.nanoTime() - start);
         // The VR command bar under the screen pointed at, from one of its blocks.
         WorldBar.Frame bar = mine ? WorldPointing.barFrame(mc, group, screen.getBlockPos(), rect) : null;
-        return new Piece(group, screen.getBlockPos(), state, picture, rect, cover, drawsCover, bar != null ? bar : hint);
+        return new Piece(group, screen.getBlockPos(), state, picture, rect, cover, drawsCover, bar != null ? bar : hint, group.fromGlass(camera));
     }
 
     /** A block of a screen that shows no picture: only its hint, if it draws that, else nothing. */
     private static Piece hintOnly(ScreenGroups.Group group, ScreenBlockEntity screen, BlockState state, WorldBar.Frame hint) {
-        return hint == null ? null : new Piece(group, screen.getBlockPos(), state, null, null, null, false, hint);
+        return hint == null ? null : new Piece(group, screen.getBlockPos(), state, null, null, null, false, hint, null);
     }
 
     //? if >=26.1 {
@@ -107,7 +109,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
                                    ModelFeatureRenderer.CrumblingOverlay breakProgress) {
         BlockEntityRenderer.super.extractRenderState(screen, state, partialTick, camera, breakProgress);
         // The world is read once a frame, so the frame stands in for 1.21.1's pass.
-        state.piece = piece(screen, null);
+        state.piece = piece(screen, null, camera);
     }
 
     @Override
@@ -133,7 +135,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
     *///?} else {
     @Override
     public void render(ScreenBlockEntity screen, float partialTick, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        Piece p = piece(screen, buffers);
+        Piece p = piece(screen, buffers, Minecraft.getInstance().gameRenderer.getMainCamera().getPosition());
         if (p == null) return;
         pose.pushPose();
         turn(pose, p.group().facing);
@@ -156,7 +158,7 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
      */
     private static void drawPiece(Piece p, Matrix4f m, VertexConsumer out) {
         float[] rect = p.rect(), cover = p.cover();
-        float[] glass = glass(p.group(), p.pos(), p.state(), rect[0], rect[1], rect[2], rect[3]);
+        float[] glass = glass(p.group(), p.pos(), p.state(), p.eye(), rect[0], rect[1], rect[2], rect[3]);
         if (glass == null) return;
         int col = p.group().col(p.pos()), row = p.group().row(p.pos());
         WorldScreens.Picture picture = p.picture();
@@ -201,21 +203,30 @@ public final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEnti
         for (BlockPos member : group.members) {
             BlockState state = level.getBlockState(member);
             if (!(state.getBlock() instanceof ScreenBlock)) continue;
-            float[] glass = glass(group, member, state, cover[0], cover[2], w, h);
+            float[] glass = glass(group, member, state, p.eye(), cover[0], cover[2], w, h);
             if (glass != null) quad(m, out, col, row, glass, FRONT_Z, 0.5F, 0.5F, 0.5F, 0.5F);
         }
     }
 
     /**
      * The part of {@code left, bottom, w, h} (in blocks, on the whole screen) on this block's glass: its square, less
-     * the bezel on the sides with no screen joined. {x0, x1, y0, y1}, or null.
+     * the bezel on the sides with no screen joined. Without a bezel, those sides end where the floating picture still
+     * looks inside the screen from {@code eye} ({@link ScreenGroups.Group#fromGlass}). {x0, x1, y0, y1}, or null.
      */
-    private static float[] glass(ScreenGroups.Group group, BlockPos pos, BlockState state, float left, float bottom, float w, float h) {
+    private static float[] glass(ScreenGroups.Group group, BlockPos pos, BlockState state, float[] eye, float left, float bottom, float w, float h) {
         int col = group.col(pos), row = group.row(pos);
-        float x0 = Math.max(left, col + (state.getValue(ScreenBlock.LEFT) ? 0 : BEZEL));
-        float x1 = Math.min(left + w, col + 1 - (state.getValue(ScreenBlock.RIGHT) ? 0 : BEZEL));
-        float y0 = Math.max(bottom, row + (state.getValue(ScreenBlock.DOWN) ? 0 : BEZEL));
-        float y1 = Math.min(bottom + h, row + 1 - (state.getValue(ScreenBlock.UP) ? 0 : BEZEL));
+        float bezel = ScreenFrames.bezel();
+        float outerLeft = col + bezel, outerRight = col + 1 - bezel, outerBottom = row + bezel, outerTop = row + 1 - bezel;
+        if (bezel == 0) {
+            outerLeft = PictureFit.lowEdge(col, eye[0], eye[2], LIFT);
+            outerRight = PictureFit.highEdge(col + 1, eye[0], eye[2], LIFT);
+            outerBottom = PictureFit.lowEdge(row, eye[1], eye[2], LIFT);
+            outerTop = PictureFit.highEdge(row + 1, eye[1], eye[2], LIFT);
+        }
+        float x0 = Math.max(left, state.getValue(ScreenBlock.LEFT) ? col : outerLeft);
+        float x1 = Math.min(left + w, state.getValue(ScreenBlock.RIGHT) ? col + 1 : outerRight);
+        float y0 = Math.max(bottom, state.getValue(ScreenBlock.DOWN) ? row : outerBottom);
+        float y1 = Math.min(bottom + h, state.getValue(ScreenBlock.UP) ? row + 1 : outerTop);
         return x0 < x1 && y0 < y1 ? new float[] {x0, x1, y0, y1} : null;
     }
 

@@ -16,6 +16,9 @@ public final class ClientMain implements ClientHooks {
                 Native.class.getPackage().getImplementationVersion(),
                 Native.class.getProtectionDomain().getCodeSource().getLocation());
         DesktopClient.init();
+        // The frame pieces' tint, by the model's tint index: how "Frames: OFF" hides the frame (ScreenFrames).
+        Minecraft.getMinecraft().getBlockColors().registerBlockColorHandler(
+                (state, world, pos, tintIndex) -> ScreenFrames.tint(tintIndex), DesktopScreens.SCREEN);
     }
 
     @Override

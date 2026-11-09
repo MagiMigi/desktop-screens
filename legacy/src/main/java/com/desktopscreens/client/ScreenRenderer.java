@@ -2,9 +2,11 @@ package com.desktopscreens.client;
 
 import com.desktopscreens.ScreenBlock;
 import com.desktopscreens.ScreenBlockEntity;
+import com.desktopscreens.core.PictureFit;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
@@ -28,9 +30,10 @@ import java.util.UUID;
  * each block draws only its own piece of it, so Minecraft's per-block visibility checks just work.
  */
 final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> {
-    private static final float BEZEL = ScreenGroups.BEZEL;
+    /** How far the picture floats in front of the glass, in blocks. */
+    private static final float LIFT = 0.002f;
     /** Just in front of the glass, in the model's coordinates (the panel is the back 2/16 of the block). */
-    private static final float FRONT_Z = 14 / 16f - 0.002f;
+    private static final float FRONT_Z = 14 / 16f - LIFT;
     /** The note on the cover over the game in a picture of its own monitor ({@link GameCover}): a little toward the viewer. */
     private static final float NOTE_Z = FRONT_Z - 0.004f;
     private static final int GREY = 0x16, TITLE = 0xFFFFFFFF, TEXT = 0xFFB0B0B0, LINE_GAP = 2, TITLE_GAP = 5;
@@ -58,6 +61,8 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
         float[] rect = group.pictureRect(picture.cropW, picture.cropH);
         float[] cover = coverRect(picture, rect);
         IBlockState actual = state.getActualState(world, pos);
+        // The camera as seen from the glass: includes the third-person view and the glide's move.
+        float[] eye = group.fromGlass(ActiveRenderInfo.projectViewFromEntity(mc.getRenderViewEntity(), partialTicks));
 
         GlStateManager.pushMatrix();
         GlStateManager.translate(x, y, z);
@@ -77,11 +82,11 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
         GlStateManager.enablePolygonOffset();
         GlStateManager.doPolygonOffset(-1, -10);
         GlStateManager.bindTexture(picture.texture.id());
-        drawPiece(group, pos, actual, picture, rect, cover);
+        drawPiece(group, pos, actual, eye, picture, rect, cover);
         // Once per screen and frame, by whichever block comes first: the cover spans blocks.
         if (cover != null && group.coverPicture != picture) {
             group.coverPicture = picture;
-            drawCoverGlass(world, group, pos, cover);
+            drawCoverGlass(world, group, pos, eye, cover);
             int col = group.col(pos), row = group.row(pos);
             drawNote(1 - (cover[0] - col), cover[3] - row, cover[1] - cover[0], cover[3] - cover[2]);
         }
@@ -97,8 +102,8 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
      * This block's piece of the picture, in the model's coordinates; around the cover only, which would otherwise
      * fight it for its place at a distance.
      */
-    private static void drawPiece(ScreenGroups.Group group, BlockPos pos, IBlockState state, WorldScreens.Picture picture, float[] rect, float[] cover) {
-        float[] glass = glass(group, pos, state, rect[0], rect[1], rect[2], rect[3]);
+    private static void drawPiece(ScreenGroups.Group group, BlockPos pos, IBlockState state, float[] eye, WorldScreens.Picture picture, float[] rect, float[] cover) {
+        float[] glass = glass(group, pos, state, eye, rect[0], rect[1], rect[2], rect[3]);
         if (glass == null) return;
         int col = group.col(pos), row = group.row(pos);
         Tessellator tessellator = Tessellator.getInstance();
@@ -138,7 +143,7 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
     }
 
     /** The cover over every block's glass, drawn from the block at {@code pos} (turned the model's way). */
-    private static void drawCoverGlass(World world, ScreenGroups.Group group, BlockPos pos, float[] cover) {
+    private static void drawCoverGlass(World world, ScreenGroups.Group group, BlockPos pos, float[] eye, float[] cover) {
         float w = cover[1] - cover[0], h = cover[3] - cover[2];
         int col = group.col(pos), row = group.row(pos);
         GlStateManager.disableTexture2D();
@@ -149,7 +154,7 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
         for (BlockPos member : group.members) {
             IBlockState state = world.getBlockState(member);
             if (!(state.getBlock() instanceof ScreenBlock)) continue;
-            float[] glass = glass(group, member, state.getActualState(world, member), cover[0], cover[2], w, h);
+            float[] glass = glass(group, member, state.getActualState(world, member), eye, cover[0], cover[2], w, h);
             if (glass != null) quad(out, col, row, glass, FRONT_Z, 0, 0, 0, 0, false);
         }
         tessellator.draw();
@@ -188,14 +193,23 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
 
     /**
      * The part of {@code left, bottom, w, h} (in blocks, on the whole screen) on this block's glass: its square, less
-     * the bezel on the sides with no screen joined. {x0, x1, y0, y1}, or null.
+     * the bezel on the sides with no screen joined. Without a bezel, those sides end where the floating picture still
+     * looks inside the screen from {@code eye} ({@link ScreenGroups.Group#fromGlass}). {x0, x1, y0, y1}, or null.
      */
-    private static float[] glass(ScreenGroups.Group group, BlockPos pos, IBlockState state, float left, float bottom, float w, float h) {
+    private static float[] glass(ScreenGroups.Group group, BlockPos pos, IBlockState state, float[] eye, float left, float bottom, float w, float h) {
         int col = group.col(pos), row = group.row(pos);
-        float x0 = Math.max(left, col + (state.getValue(ScreenBlock.LEFT) ? 0 : BEZEL));
-        float x1 = Math.min(left + w, col + 1 - (state.getValue(ScreenBlock.RIGHT) ? 0 : BEZEL));
-        float y0 = Math.max(bottom, row + (state.getValue(ScreenBlock.DOWN) ? 0 : BEZEL));
-        float y1 = Math.min(bottom + h, row + 1 - (state.getValue(ScreenBlock.UP) ? 0 : BEZEL));
+        float bezel = ScreenFrames.bezel();
+        float outerLeft = col + bezel, outerRight = col + 1 - bezel, outerBottom = row + bezel, outerTop = row + 1 - bezel;
+        if (bezel == 0) {
+            outerLeft = PictureFit.lowEdge(col, eye[0], eye[2], LIFT);
+            outerRight = PictureFit.highEdge(col + 1, eye[0], eye[2], LIFT);
+            outerBottom = PictureFit.lowEdge(row, eye[1], eye[2], LIFT);
+            outerTop = PictureFit.highEdge(row + 1, eye[1], eye[2], LIFT);
+        }
+        float x0 = Math.max(left, state.getValue(ScreenBlock.LEFT) ? col : outerLeft);
+        float x1 = Math.min(left + w, state.getValue(ScreenBlock.RIGHT) ? col + 1 : outerRight);
+        float y0 = Math.max(bottom, state.getValue(ScreenBlock.DOWN) ? row : outerBottom);
+        float y1 = Math.min(bottom + h, state.getValue(ScreenBlock.UP) ? row + 1 : outerTop);
         return x0 < x1 && y0 < y1 ? new float[] {x0, x1, y0, y1} : null;
     }
 
