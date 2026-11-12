@@ -23,9 +23,17 @@ final class GameCover {
 
     private GameCover() {}
 
-    private static List<ITextComponent> lines() {
+    /**
+     * The note, walking through the whole way, from G to back in the game: on one monitor G at such a screen lands you
+     * on your real desktop, which a player once took for the mod failing (2026-11-09). Also drawn on screens in the
+     * world ({@link ScreenRenderer}).
+     */
+    static List<ITextComponent> lines() {
         return Arrays.asList(new TextComponentTranslation("desktopscreens.cover.title"),
-                new TextComponentTranslation("desktopscreens.cover.how", DesktopClient.hostKey("O")),
+                new TextComponentTranslation("desktopscreens.cover.intro"),
+                new TextComponentTranslation("desktopscreens.cover.step1", DesktopClient.key(DesktopClient.OPEN_KEY)),
+                new TextComponentTranslation("desktopscreens.cover.step2", DesktopClient.hostKey("O")),
+                new TextComponentTranslation("desktopscreens.cover.step3", DesktopClient.hostKey()),
                 new TextComponentTranslation("desktopscreens.cover.why"));
     }
 

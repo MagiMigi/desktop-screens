@@ -327,7 +327,11 @@ final class DesktopSession {
         if (isGameMonitor(target)) startClickThrough();
         windowArea = window == null ? null : windowAreaNow();
         input.setHostKey(DesktopClient.hostScancode()); // picked in Controls, maybe since the last time
-        input.enter(target, window); // after the click-through, so the focus goes to the app behind the game window
+        String held = input.enter(target, window); // after the click-through, so the focus goes to the app behind the game window
+        if (held != null) {
+            DesktopScreens.LOG.info("Something kept the mouse in {} (the fullscreen game, most likely); let it go first, so the mouse starts in the middle of {}",
+                    held, target.label());
+        }
     }
 
     /** Gives the mouse and keyboard back to Minecraft. */

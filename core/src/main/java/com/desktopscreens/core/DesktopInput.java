@@ -23,6 +23,7 @@ public final class DesktopInput {
      * Left Ctrl still works for shortcuts.
      */
     public static final int DEFAULT_HOST_KEY = 0x11D;
+    private static final int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
     /** Windows virtual-key codes for host key commands. */
     public static final int VK_F = 0x46, VK_M = 0x4D, VK_O = 0x4F, VK_P = 0x50, VK_S = 0x53, VK_W = 0x57;
     public static final int VK_0 = 0x30, VK_NUMPAD0 = 0x60, VK_ADD = 0x6B, VK_SUBTRACT = 0x6D, VK_OEM_PLUS = 0xBB, VK_OEM_MINUS = 0xBD;
@@ -84,16 +85,18 @@ public final class DesktopInput {
     /**
      * Moves the mouse to the middle of {@code target}, gives focus to the window under it, and locks the mouse
      * there. With a {@code window}, only inside that window (the whole monitor while it's minimized): the mouse
-     * goes to its middle and it gets the focus.
+     * goes to its middle and it gets the focus. Returns where the mouse was held before ({@link #freeMouse}), for the
+     * log, or null.
      */
-    public void enter(Monitor target, AppWindow window) {
-        if (session != null) return;
+    public String enter(Monitor target, AppWindow window) {
+        if (session != null) return null;
         int[] area = window == null ? null : window.rectOn(target);
         int cx = target.x + target.width / 2, cy = target.y + target.height / 2;
         if (area != null) {
             cx = (area[0] + area[2]) / 2;
             cy = (area[1] + area[3]) / 2;
         }
+        String held = freeMouse();
         U32.I.SetCursorPos(cx, cy);
         if (window != null) {
             window.restore();
@@ -108,6 +111,34 @@ public final class DesktopInput {
         }
         // Lock after the focus change above, because focus changes make Windows drop the lock.
         session = new InputSession(target, window, game, hostKey, listener);
+        return held;
+    }
+
+    /**
+     * Lets the mouse go if something keeps it in part of the screen. A fullscreen game does, menu open or not:
+     * LWJGL 2 (Minecraft 1.12.2) whenever it's fullscreen and in front, SDL (26.3) with Exclusive Fullscreen, which
+     * Sodium turns on. Windows then stops a move to another monitor at the game window's edge, and the lock there
+     * puts the mouse on that monitor's nearest edge instead of its middle (2026-11-12). Returns the area it was kept
+     * in, or null if it was free.
+     */
+    private static String freeMouse() {
+        RECT clip = new RECT();
+        if (!U32.I.GetClipCursor(clip)) return null;
+        User32 u = User32.INSTANCE;
+        if (!confines(clip.left, clip.top, clip.right, clip.bottom, u.GetSystemMetrics(SM_XVIRTUALSCREEN),
+                u.GetSystemMetrics(SM_YVIRTUALSCREEN), u.GetSystemMetrics(SM_CXVIRTUALSCREEN), u.GetSystemMetrics(SM_CYVIRTUALSCREEN))) {
+            return null;
+        }
+        U32.I.ClipCursor(null);
+        return clip.left + "," + clip.top + " " + (clip.right - clip.left) + "x" + (clip.bottom - clip.top);
+    }
+
+    /**
+     * Whether a clip rectangle (edges, as {@code GetClipCursor} gives them) keeps the mouse in less than the whole
+     * virtual screen ({@code x, y, width, height}). With no clip, Windows reports the whole virtual screen.
+     */
+    static boolean confines(int left, int top, int right, int bottom, int x, int y, int width, int height) {
+        return left > x || top > y || right < x + width || bottom < y + height;
     }
 
     /**

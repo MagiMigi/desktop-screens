@@ -27,7 +27,7 @@ Download: [Modrinth](https://modrinth.com/mod/desktop-screens) · [CurseForge](h
 - **Its own picture on every screen:** each screen can show a different monitor or just one window.
 - **Sharing:** add friends by name; they see your screen and hear your PC near it (never Minecraft, nor your voice chat unless the screen shows its window).
 - **Picture-in-picture:** a window, small in a corner while you play (with a tablet in your inventory).
-- **Shader packs:** screens work with Iris (and Oculus on Forge 1.20.1), with a brightness slider in the settings while a shader pack is on. Not on 1.12.2, and not yet on 26.3: Sodium's beta there, which Iris needs, doesn't draw screens (or chests and signs).
+- **Shader packs:** screens work with Iris (and Oculus on Forge 1.20.1), with a brightness slider in the settings while a shader pack is on. Not on 1.12.2. On 26.3, Sodium 0.9.3-beta.5 draws screens (earlier betas didn't), but it won't start with the current Iris (1.11.7), so shader packs there wait for Iris 1.12.1.
 
 ## Keys
 

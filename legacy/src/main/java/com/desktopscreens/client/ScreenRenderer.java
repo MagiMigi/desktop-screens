@@ -16,11 +16,9 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import org.lwjgl.opengl.GL11;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -168,9 +166,7 @@ final class ScreenRenderer extends TileEntitySpecialRenderer<ScreenBlockEntity> 
      */
     private static void drawNote(float x, float y, float w, float h) {
         FontRenderer font = Minecraft.getMinecraft().fontRenderer;
-        List<ITextComponent> lines = Arrays.asList(new TextComponentTranslation("desktopscreens.cover.title"),
-                new TextComponentTranslation("desktopscreens.cover.how", DesktopClient.hostKey("O")),
-                new TextComponentTranslation("desktopscreens.cover.why"));
+        List<ITextComponent> lines = GameCover.lines();
         int widest = 1;
         for (ITextComponent line : lines) widest = Math.max(widest, font.getStringWidth(line.getFormattedText()));
         int height = lines.size() * font.FONT_HEIGHT + TITLE_GAP + (lines.size() - 2) * LINE_GAP;

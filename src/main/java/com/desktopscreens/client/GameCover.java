@@ -31,10 +31,18 @@ final class GameCover {
 
     private GameCover() {}
 
+    /**
+     * The note. Outside VR it walks through the whole way, from G to back in the game: on one monitor G at such a
+     * screen lands you on your real desktop, which a player once took for the mod failing (2026-11-09).
+     */
     private static List<Component> lines() {
-        return List.of(Component.translatable("desktopscreens.cover.title"),
-                Component.translatable(DesktopClient.vr("desktopscreens.cover.how"), DesktopClient.hostKey("O")),
-                Component.translatable("desktopscreens.cover.why"));
+        Component title = Component.translatable("desktopscreens.cover.title"), why = Component.translatable("desktopscreens.cover.why");
+        if (VrMode.panel()) return List.of(title, Component.translatable("desktopscreens.cover.how.vr"), why);
+        return List.of(title, Component.translatable("desktopscreens.cover.intro"),
+                Component.translatable("desktopscreens.cover.step1", DesktopClient.key(DesktopClient.OPEN_KEY)),
+                Component.translatable("desktopscreens.cover.step2", DesktopClient.hostKey("O")),
+                Component.translatable("desktopscreens.cover.step3", DesktopClient.hostKey()),
+                why);
     }
 
     /**
